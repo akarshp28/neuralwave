@@ -17,6 +17,7 @@ num_rows = 90000
 val_split = 0.20
 num_obs = 15
 val_num = int((val_split*num_people*num_obs)/num_people)
+print("val_num: ", val_num)
 num_cols = 6
 n_steps = num_rows * num_obs
 num_aug_ops = 5

@@ -39,7 +39,6 @@ filepath="ca_weights_new-64-0.00.hdf5"
 num_people = len(names)
 win_size = 90000
 num_cols = 6
-decision = 1
 batch_size = 4
 
 def graph_plot(i, j, data_batch, label_batch):
@@ -118,57 +117,88 @@ def scale_big_data(us_data, minn=None, maxx=None):
 def main():
 	print('importing dataset')
 
-	with h5py.File(srcdir, 'r') as hf:
-		x_data = hf['train_x'][:]
-		y_data = hf['train_y'][:]
+	with h5py.File(srcdir + '/data.h5', 'r') as hf:
+        train_x = hf['train_x'][:]
+        train_y = hf['train_y'][:]
+        val_x = hf['val_x'][:]
+        val_y = hf['val_y'][:]
 
-	print(x_data.shape, y_data.shape)
+
+	print(train_x.shape, train_y.shape, val_x.shape, val_y.shape)
 	
-	if decision == 1:
-		print('standardising and normalising dataset to [-1,1]')
+if decision == 1:
+    print('standardising and normalising dataset to [-1,1]')
 
-		x_data_mag = x_data[:, 0:3]
-		x_data_phase = x_data[:, 3:]
+    x_data_mag = train_x[:, 0:3]
+    x_data_phase = train_x[:, 3:]
 
-		x_data_mag -= np.mean(x_data_mag)
-		x_data_phase -= np.mean(x_data_phase)
+    x_data_mag -= np.mean(x_data_mag)
+    x_data_phase -= np.mean(x_data_phase)
 
-		# first 3 cols
-		minel = np.min(x_data_mag)
-		maxel = np.max(x_data_mag)
-		x_data_mag = scale_big_data(x_data_mag, minn=minel, maxx=maxel)
+    # first 3 cols
+    minel = np.min(x_data_mag)
+    maxel = np.max(x_data_mag)
+    x_data_mag = scale_big_data(x_data_mag, minn=minel, maxx=maxel)
 
-		# last 3 cols
-		minel = np.min(x_data_phase)
-		maxel = np.max(x_data_phase)
-		x_data_phase = scale_big_data(x_data_phase, minn=minel, maxx=maxel)
+    # last 3 cols
+    minel = np.min(x_data_phase)
+    maxel = np.max(x_data_phase)
+    x_data_phase = scale_big_data(x_data_phase, minn=minel, maxx=maxel)
 
-		x_data = np.concatenate((x_data_mag, x_data_phase), axis=1)
+    train_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
+#############
+    x_data_mag = val_x[:, 0:3]
+    x_data_phase = val_x[:, 3:]
 
-		print(x_data.shape)
+    x_data_mag -= np.mean(x_data_mag)
+    x_data_phase -= np.mean(x_data_phase)
 
-	elif decision == 2:
-		print('standardising and normalising dataset to unit norm')
+    # first 3 cols
+    minel = np.min(x_data_mag)
+    maxel = np.max(x_data_mag)
+    x_data_mag = scale_big_data(x_data_mag, minn=minel, maxx=maxel)
 
-		x_data_mag = x_data[:, 0:3]
-		x_data_phase = x_data[:, 3:]
+    # last 3 cols
+    minel = np.min(x_data_phase)
+    maxel = np.max(x_data_phase)
+    x_data_phase = scale_big_data(x_data_phase, minn=minel, maxx=maxel)
 
-		x_data_mag -= np.mean(x_data_mag)
-		x_data_phase -= np.mean(x_data_phase)
+    val_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
 
-		x_data_mag /= np.std(x_data_mag)
-		x_data_phase /= np.std(x_data_phase)
+    print(train_x.shape, val_x.shape)
 
-		x_data = np.concatenate((x_data_mag, x_data_phase), axis=1)
+#############################################################################################
 
-		print(x_data.shape)
+if decision == 2:
+    print('standardising and normalising dataset to unit norm')
 
-	x_data = x_data.reshape((-1, win_size, num_cols))
+    x_data_mag = train_x[:, 0:3]
+    x_data_phase = train_x[:, 3:]
 
-	print(x_data.shape, y_data.shape)
-	del x_data_mag, x_data_phase, big_data
+    x_data_mag -= np.mean(x_data_mag)
+    x_data_phase -= np.mean(x_data_phase)
 
-	total_batches = x_data.shape[0]
+    x_data_mag /= np.std(x_data_mag)
+    x_data_phase /= np.std(x_data_phase)
+
+    train_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
+########
+    x_data_mag = val_x[:, 0:3]
+    x_data_phase = val_x[:, 3:]
+
+    x_data_mag -= np.mean(x_data_mag)
+    x_data_phase -= np.mean(x_data_phase)
+
+    x_data_mag /= np.std(x_data_mag)
+    x_data_phase /= np.std(x_data_phase)
+
+    val_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
+
+    print(train_x.shape, val_x.shape)
+
+#############################################################################################
+
+	total_batches = train_x.shape[0]
 	
 	print('creating network')
 	inputs = Input(shape=(win_size, num_cols))
@@ -192,11 +222,11 @@ def main():
 	num_cores = multiprocessing.cpu_count()
 
 	print("start")
-	for i in range(0, x_data.shape[0], batch_size):
-            print(x_data.shape[0], "/", i)
+	for i in range(0, train_x.shape[0], batch_size):
+            print(train_x.shape[0], "/", i)
 
-            x = x_data[i: i + batch_size]
-            y = y_data[i: i + batch_size]
+            x = train_x[i: i + batch_size]
+            y = train_y[i: i + batch_size]
 
             Parallel(n_jobs=num_cores)(delayed(graph_plot)(j, i, x, y) for j in range(x.shape[0]))
             data_batch = model.predict_on_batch(x) 
