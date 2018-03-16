@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import h5py
 
-#dataset_gdrive = https://drive.google.com/open?id=0B6FZBAhUFX8OaUJZRDkzaFVJQlk
-
 src_dir = './dataset'
 dest_file = './dataset/data.h5'
 
@@ -14,26 +12,28 @@ names = ['abhishek', 'ahmad', 'akarsh', 'avatar', 'chaitanya', 'champ', 'harshit
 
 num_people = len(names)
 num_rows = 90000
-val_split = 0.20
+val_split = 0.15
+test_split = 0.15
 num_obs = 15
-val_num = int((val_split*num_people*num_obs)/num_people)
-print("val_num: ", val_num)
 num_cols = 6
-n_steps = num_rows * num_obs
-num_aug_ops = 5
-total_data_steps = num_rows * num_obs * num_aug_ops
 mean_noise = 0
 std_noise = 0.1
+
+val_num = int((val_split*num_people*num_obs)/num_people)
+test_num = int((test_split*num_people*num_obs)/num_people)
+print("val_num: ", val_num, "test_num: ", test_num, "train_num: ", num_obs-test_num-val_num)
 
 print("merging csv")
 
 val_x = []
 val_y = []
+test_x = []
+test_y = []
 train_x = []
 train_y = []
 
 for index, name in enumerate(names):
-    print('preparing data for ', name)
+    print('merging data for ', name)
 
     filenames = []
     for i in range(1,num_obs+1):
@@ -47,13 +47,25 @@ for index, name in enumerate(names):
             print (filename)
         dfs.append(df)
         
-    shuffle(dfs)    
+    shuffle(dfs) 
+       
     val_x.extend(dfs[:val_num])
-    train_x.extend(dfs[val_num:])
+    test_x.extend(dfs[val_num:(val_num+test_num)])
+    train_x.extend(dfs[(val_num+test_num):])
+    
     val_y.extend(index for _ in range(val_num))
-    train_y.extend(index for _ in range(num_obs - val_num))
+    test_y.extend(index for _ in range(test_num))
+    train_y.extend(index for _ in range(num_obs-test_num-val_num))
+
+print("transforming training data")   
+
+train_x_temp = []
+train_y_temp = []
 
 for i in range(0,len(train_x)):
+    
+
+    print("transforming training data ", len(train_x), "/", i)   
     mag = train_x[i][:, :3]
     phase = train_x[i][:, 3:]
     
@@ -70,26 +82,35 @@ for i in range(0,len(train_x)):
     
     data_corrupt = train_x[i] + gaussian_noise
     
-    train_x.append(flip_join)
-    train_x.append(flip_updown)
-    train_x.append(flip_combo)
-    train_x.append(data_corrupt)
+    train_x_temp.append(train_x[i])
+    train_x_temp.append(flip_join)
+    train_x_temp.append(flip_updown)
+    train_x_temp.append(flip_combo)
+    train_x_temp.append(data_corrupt)
     
-    train_y.extend(train_y[i] for _ in range(4))
+    train_y_temp.extend(train_y[i] for _ in range(5))
     
-print(len(train_y), len(train_x))
-
+train_x = train_x_temp
+train_y = train_y_temp
+    
+print("Training label set  size: ", len(train_y), "\nTraining data set size: ", len(train_x))
+print ("Converting data to numpy arrays")
 val_x = np.array(val_x)
 val_y = np.array(val_y)
+test_x = np.array(test_x)
+test_y = np.array(test_y)
 train_x = np.array(train_x)
 train_y = np.array(train_y)
 
-print (val_x.shape, val_y.shape, train_x.shape, train_y.shape)
+print ("Val data and labels: ", val_x.shape, val_y.shape, "\ntest data and labels: ", test_x.shape, test_y.shape, "\ntrain data and labels: ", train_x.shape, train_y.shape)
+print ("Generating h5 file")
 
 hf = h5py.File(dest_file, 'w')
 hf.create_dataset('train_x', data=train_x)
 hf.create_dataset('train_y', data=train_y)
+hf.create_dataset('test_x', data=test_x)
+hf.create_dataset('test_y', data=test_y)
 hf.create_dataset('val_x', data=val_x)
 hf.create_dataset('val_y', data=val_y)
 hf.close()
-
+    
