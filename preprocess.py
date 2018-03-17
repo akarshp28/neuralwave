@@ -12,8 +12,8 @@ names = ['abhishek', 'ahmad', 'akarsh', 'avatar', 'chaitanya', 'champ', 'harshit
 
 num_people = len(names)
 num_rows = 90000
-val_split = 0.15
-test_split = 0.15
+val_split = 0.20
+test_split = 0
 num_obs = 15
 num_cols = 6
 mean_noise = 0

@@ -3,7 +3,6 @@ from keras.models import Model
 import numpy as np
 from keras import optimizers
 from keras.callbacks import TensorBoard, ModelCheckpoint
-from sklearn.model_selection import StratifiedShuffleSplit
 import pandas as pd
 from sklearn.utils import shuffle
 import time
@@ -25,7 +24,7 @@ win_size = 90000
 num_cols = 6
 batch_size = 8
 EPOCHS = 150
-learning_rate = 0.001
+learning_rate = 0.01
 
 def scale_big_data(us_data, minn, maxx):
     int_a = -1
@@ -40,39 +39,41 @@ print('importing dataset')
 with h5py.File(srcdir + '/data.h5', 'r') as hf:
     train_x = hf['train_x'][:]
     train_y = hf['train_y'][:]
+    test_x = hf['test_x'][:]
+    test_y = hf['test_y'][:]
     val_x = hf['val_x'][:]
     val_y = hf['val_y'][:]
 
 
-print(train_x.shape, train_y.shape, val_x.shape, val_y.shape)
+print(train_x.shape, train_y.shape, test_x.shape, test_y.shape, val_x.shape, val_y.shape)
 
 #############################################################################################
 
 print('standardising and normalising dataset to [-1,1]')
-x_data_mag = train_x[:, :,:3]
-x_data_phase = train_x[:, :,3:]
+x_data_mag = train_x[:, :, :3]
+x_data_phase = train_x[:, :, 3:]
 
-mean_mag = np.mean(np.mean(x_data_mag, axis=-2), axis=-2)
-mean_phase = np.mean(np.mean(x_data_phase, axis=-2), axis=-2)
+mean_mag = np.mean(x_data_mag)
+mean_phase = np.mean(x_data_phase)
 
 x_data_mag -= mean_mag
 x_data_phase -= mean_phase
 
  # first 3 cols
-minel_mag = np.min(np.min(x_data_mag, axis = -2), axis = -2)
-maxel_mag = np.max(np.max(x_data_mag, axis = -2), axis = -2)
+minel_mag = np.min(x_data_mag)
+maxel_mag = np.max(x_data_mag)
 x_data_mag = scale_big_data(x_data_mag, minn=minel_mag, maxx=maxel_mag)
 
 # last 3 cols
-minel_phase = np.min(np.min(x_data_phase, axis = -2), axis = -2)
-maxel_phase = np.max(np.max(x_data_phase, axis = -2), axis = -2)
+minel_phase = np.min(x_data_phase)
+maxel_phase = np.max(x_data_phase)
 x_data_phase = scale_big_data(x_data_phase, minn=minel_phase, maxx=maxel_phase)
 
 train_x = np.concatenate((x_data_mag, x_data_phase), axis=-1)
 
 # #############
-x_data_mag = val_x[:, :,:3]
-x_data_phase = val_x[:, :,3:]
+x_data_mag = val_x[:, :, :3]
+x_data_phase = val_x[:, :, 3:]
 
 x_data_mag -= mean_mag
 x_data_phase -= mean_phase
@@ -85,7 +86,7 @@ x_data_phase = scale_big_data(x_data_phase, minn=minel_phase, maxx=maxel_phase)
 
 val_x = np.concatenate((x_data_mag, x_data_phase), axis=-1)
 
-print(train_x.shape, train_y.shape, val_x.shape, val_y.shape)
+print("Final preprocessed data shape: ", train_x.shape, train_y.shape, val_x.shape, val_y.shape)
 
 # #############################################################################################
 
@@ -132,7 +133,7 @@ x = Conv1D(num_cols, 200, padding="same", name="reshape_conv")(x)
 model = Model(inputs, x)
 model.summary()
 
-model.compile(optimizer=optimizers.adam(lr=learning_rate, decay=1e-5),
+model.compile(optimizer=optimizers.Nadam(),
               loss='mean_squared_error',
               metrics=['accuracy'])
 
@@ -155,4 +156,4 @@ model.fit_generator(train,
                     callbacks = [tensorboard, checkpoint],
                     validation_data = validation,
                     validation_steps = val_x.shape[0]//batch_size,
-                    verbose=2)
+                    verbose = 1)
