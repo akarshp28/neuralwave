@@ -43,7 +43,6 @@ with h5py.File(srcdir + '/data.h5', 'r') as hf:
     train_x = hf['train_x'][:]
     val_x = hf['val_x'][:]
 
-
 print(train_x.shape, val_x.shape)
 
 #############################################################################################
@@ -85,25 +84,24 @@ x_data_phase = scale_big_data(x_data_phase, minn=minel_phase, maxx=maxel_phase)
 
 val_x = np.concatenate((x_data_mag, x_data_phase), axis=-1)
 
-train_x = np.expand_dims(train_x, -1)
-val_x = np.expand_dims(val_x, -1)
-
 del x_data_mag, x_data_phase
 
 print("Final preprocessed data shape: ", train_x.shape, val_x.shape)
 
 # ##########################################################################################
-def expand_dims(x):
-    return K.expand_dims(x, -1)
-    
-def squeeze(x):
-    return K.squeeze(x, -1)
 
+def get_csi_minibatch(train_x, train_y, batch_size):
+    while True:
+        train_x, train_y = shuffle(train_x, train_y)
+        for p in range(0, train_x.shape[0], batch_size):
+            yy_data = train_x[p: p + batch_size]
+            yy_label = train_y[p: p + batch_size]
+            yield yy_data, yy_label
+
+# ##########################################################################################
 
 print('creating network')
-inputs = Input(shape=(win_size, num_cols, 1))
-
-x = Lambda(squeeze)(inputs)
+inputs = Input(shape=(win_size, num_cols))
 
 x = Conv1D(256, 200, padding="same", name="encoder_Conv1", activation="relu")(x)
 x = MaxPooling1D(2, strides = 2, name= "encoder_max1")(x)
@@ -133,8 +131,6 @@ x = UpSampling1D(size = 2, name="decoder_up4")(x)
 
 x = Conv1D(num_cols, 200, padding="same", name="reshape_conv", activation="tanh")(x)
 
-x = Lambda(expand_dims)(x)
-
 model = Model(inputs, x)
 model.summary()
 
@@ -142,8 +138,8 @@ model.compile(optimizer=optimizers.Nadam(),
               loss='mean_squared_error',
               metrics=['accuracy'])
 
-train_data = ImageDataGenerator()
-val_data = ImageDataGenerator()
+train = get_csi_minibatch(train_x, train_x, batch_size=batch_size)
+validation = get_csi_minibatch(val_x, val_x, batch_size=batch_size
 
 tensorboard = TensorBoard(log_dir='./logs/autoencoder_weights_{0}'.format(time.time()), write_graph=True)
 
@@ -152,10 +148,10 @@ checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_o
 
 print('training started')
 
-model.fit_generator(train_data.flow(train_x, train_x, batch_size=batch_size),
+model.fit_generator(train,
                     steps_per_epoch = train_x.shape[0]//batch_size,
                     epochs = EPOCHS,
                     callbacks = [tensorboard, checkpoint],
-                    validation_data = val_data.flow(val_x, val_x, batch_size=batch_size),
+                    validation_data = validation,
                     validation_steps = val_x.shape[0]//batch_size,
                     verbose = 1)
