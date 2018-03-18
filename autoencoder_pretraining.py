@@ -103,7 +103,7 @@ def get_csi_minibatch(train_x, train_y, batch_size):
 print('creating network')
 inputs = Input(shape=(win_size, num_cols))
 
-x = Conv1D(256, 200, padding="same", name="encoder_Conv1", activation="relu")(x)
+x = Conv1D(256, 200, padding="same", name="encoder_Conv1", activation="relu")(inputs)
 x = MaxPooling1D(2, strides = 2, name= "encoder_max1")(x)
 
 x = Conv1D(128, 200, padding="same", name="encoder_Conv2", activation="relu")(x)
@@ -134,12 +134,12 @@ x = Conv1D(num_cols, 200, padding="same", name="reshape_conv", activation="tanh"
 model = Model(inputs, x)
 model.summary()
 
-model.compile(optimizer=optimizers.Nadam(),
+model.compile(optimizer=optimizers.Adam(lr = 0.0002, decay = 1e-5),
               loss='mean_squared_error',
               metrics=['accuracy'])
 
 train = get_csi_minibatch(train_x, train_x, batch_size=batch_size)
-validation = get_csi_minibatch(val_x, val_x, batch_size=batch_size
+validation = get_csi_minibatch(val_x, val_x, batch_size=batch_size)
 
 tensorboard = TensorBoard(log_dir='./logs/autoencoder_weights_{0}'.format(time.time()), write_graph=True)
 
