@@ -25,9 +25,10 @@ num_people = len(names)
 print(num_people)
 win_size = 90000
 num_cols = 6
-batch_size = 8
 EPOCHS = 150
-learning_rate = 0.01
+INIT_LR = 5e-4
+G = 4
+batch_size = 8 * G
 
 def scale_big_data(us_data, minn, maxx):
     int_a = -1
@@ -131,10 +132,13 @@ x = UpSampling1D(size = 2, name="decoder_up4")(x)
 
 x = Conv1D(num_cols, 200, padding="same", name="reshape_conv", activation="tanh")(x)
 
-model = Model(inputs, x)
-model.summary()
+with tf.device("/cpu:0"):
+    model = Model(inputs, x)
+    model.summary()
+   
+model  = multi_gpu_model(model, gpus=G)
 
-model.compile(optimizer=optimizers.Adam(lr = 0.0002, decay = 1e-5),
+model.compile(optimizer=optimizers.Nadam(lr = INIT_LR),
               loss='mean_squared_error',
               metrics=['accuracy'])
 
