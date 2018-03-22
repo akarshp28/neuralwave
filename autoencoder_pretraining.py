@@ -1,13 +1,12 @@
+from __future__ import print_function
 from keras.layers import Input, Conv1D, UpSampling1D, MaxPooling1D
-from keras.callbacks import TensorBoard, ModelCheckpoint
-from keras.preprocessing.image import ImageDataGenerator
-from keras.layers.core import Lambda
+from keras.callbacks import TensorBoard, ModelCheckpoint, LearningRateScheduler
 from sklearn.utils import shuffle
 from keras.models import Model
 from keras import backend as K
 from keras import optimizers
-import pandas as pd
 import numpy as np
+import math
 import time
 import h5py
 
@@ -28,7 +27,9 @@ num_cols = 6
 EPOCHS = 150
 INIT_LR = 5e-4
 G = 4
-batch_size = 8 * G
+BATCH_SIZE = 8 * G
+
+#############################################################################################
 
 def scale_big_data(us_data, minn, maxx):
     int_a = -1
@@ -91,15 +92,16 @@ print("Final preprocessed data shape: ", train_x.shape, val_x.shape)
 
 # ##########################################################################################
 
-def get_csi_minibatch(train_x, train_y, batch_size):
-    while True:
-        train_x, train_y = shuffle(train_x, train_y)
-        for p in range(0, train_x.shape[0], batch_size):
-            yy_data = train_x[p: p + batch_size]
-            yy_label = train_y[p: p + batch_size]
-            yield yy_data, yy_label
+def step_decay(epoch):
+   initial_lrate = INIT_LR
+   drop = 0.5
+   epochs_drop = 10.0
+   lrate = initial_lrate * math.pow(drop,  
+           math.floor((1+epoch)/epochs_drop))
+   print ("learning rate : ", lrate)
+   return lrate
 
-# ##########################################################################################
+#############################################################################################
 
 print('creating network')
 inputs = Input(shape=(win_size, num_cols))
@@ -132,30 +134,31 @@ x = UpSampling1D(size = 2, name="decoder_up4")(x)
 
 x = Conv1D(num_cols, 200, padding="same", name="reshape_conv", activation="tanh")(x)
 
+#############################################################################################
+
 with tf.device("/cpu:0"):
     model = Model(inputs, x)
     model.summary()
    
 model  = multi_gpu_model(model, gpus=G)
 
-model.compile(optimizer=optimizers.Nadam(lr = INIT_LR),
+model.compile(optimizer=optimizers.Nadam(),
               loss='mean_squared_error',
               metrics=['accuracy'])
-
-train = get_csi_minibatch(train_x, train_x, batch_size=batch_size)
-validation = get_csi_minibatch(val_x, val_x, batch_size=batch_size)
 
 tensorboard = TensorBoard(log_dir='./logs/autoencoder_weights_{0}'.format(time.time()), write_graph=True)
 
 filepath="./weights/autoencoder_weights_{epoch:02d}_{val_acc:.2f}.hdf5"
 checkpoint = ModelCheckpoint(filepath, monitor='val_acc', verbose=1, save_best_only=True, mode='max', period=5)
 
-print('training started')
+lrate = LearningRateScheduler(step_decay)
 
-model.fit_generator(train,
-                    steps_per_epoch = train_x.shape[0]//batch_size,
-                    epochs = EPOCHS,
-                    callbacks = [tensorboard, checkpoint],
-                    validation_data = validation,
-                    validation_steps = val_x.shape[0]//batch_size,
-                    verbose = 1)
+print('training started')
+                    
+model.fit(train_x, train_x,
+          batch_size = BATCH_SIZE,
+          epochs = EPOCHS,
+          verbose = 1,
+          shuffle = True,
+          callbacks = [tensorboard, checkpoint, lrate],
+          validation_data = (val_x, val_x))

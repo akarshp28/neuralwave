@@ -1,8 +1,10 @@
 #dataset_gdrive = https://drive.google.com/open?id=0B6FZBAhUFX8OaUJZRDkzaFVJQlk
 
-from random import shuffle
+from __future__ import print_function
+from sklearn.utils import shuffle
 import pandas as pd
 import numpy as np
+import random
 import h5py
 
 src_dir = './dataset'
@@ -49,7 +51,7 @@ for index, name in enumerate(names):
             print (filename)
         dfs.append(df)
         
-    shuffle(dfs) 
+    random.shuffle(dfs) 
        
     val_x.extend(dfs[:val_num])
     test_x.extend(dfs[val_num:(val_num+test_num)])
@@ -103,6 +105,11 @@ test_x = np.array(test_x)
 test_y = np.array(test_y)
 train_x = np.array(train_x)
 train_y = np.array(train_y)
+
+print("Shuffling arrays")
+train_x, train_y = shuffle(train_x, train_y)
+test_x, test_y = shuffle(test_x, test_y)
+val_x, val_y = shuffle(val_x, val_y)
 
 print ("Val data and labels: ", val_x.shape, val_y.shape, "\ntest data and labels: ", test_x.shape, test_y.shape, "\ntrain data and labels: ", train_x.shape, train_y.shape)
 print ("Generating h5 file")
