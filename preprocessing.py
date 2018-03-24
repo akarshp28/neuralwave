@@ -1,19 +1,10 @@
-
-# coding: utf-8
-
-# In[1]:
-
-
+from __future__ import print_function
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 import random
 import pandas as pd
 import numpy as np
 import h5py
-
-
-# In[2]:
-
 
 src_dir = './dataset'
 dest_file = './dataset/data.h5'
@@ -30,10 +21,6 @@ num_cols = 6
 
 mean_noise = 0
 std_noise = 0.1
-
-
-# In[3]:
-
 
 print("merging csv")
 
@@ -56,10 +43,6 @@ data_y = np.array(data_y)
 
 print ("CSV data shape (x,y): ", data_x.shape, data_y.shape)
 
-
-# In[4]:
-
-
 print ("splitting data")
 
 x_train, x_test, y_train, y_test = train_test_split(
@@ -69,10 +52,6 @@ del data_x, data_y
 print ("\nSplit data shape")
 print ("Train (x,y) : ", x_train.shape, y_train.shape)
 print ("Test  (x,y) : ", x_test.shape, y_test.shape)
-
-
-# In[7]:
-
 
 def transformations(x, y):
     x_train_temp = []
@@ -103,17 +82,9 @@ def transformations(x, y):
 print ("transforming training data")
 x_train, y_train = transformations(x_train, y_train)
 
-
-# In[8]:
-
-
 print ("Shuffling data")
 x_train, y_train = shuffle(x_train, y_train)
 x_test, y_test = shuffle(x_test, y_test)
-
-
-# In[9]:
-
 
 print ("Final data shape")
 print ("Train (x,y) : ", x_train.shape, y_train.shape)
