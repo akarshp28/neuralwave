@@ -1,7 +1,6 @@
 from __future__ import print_function
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-import random
 import pandas as pd
 import numpy as np
 import h5py
@@ -45,8 +44,7 @@ print ("CSV data shape (x,y): ", data_x.shape, data_y.shape)
 
 print ("splitting data")
 
-x_train, x_test, y_train, y_test = train_test_split(
-									data_x, data_y, test_size=test_split, random_state=42)
+x_train, x_test, y_train, y_test = train_test_split(data_x, data_y, test_size=test_split, random_state=42)
 
 del data_x, data_y
 print ("\nSplit data shape")
