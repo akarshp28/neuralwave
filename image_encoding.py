@@ -24,10 +24,7 @@ from scipy.misc import imresize
 import time
 import errno
 
-names = ['abhishek', 'ahmad', 'akarsh', 'avatar', 'chaitanya', 'champ', 'harshith', 'ishan',
-   'kalvik', 'manish', 'nishad', 'pavan', 'phani', 'prabhu', 'raghu', 'rahul', 'sanjay', 'shuang',
-   'subramaniam', 'sushal', 'temesgen', 'vinay']
-num_people = len(names)
+num_people = 24
 
 #data filepath
 srcdir = '/home/mlbots/neuralwave/dataset/data.h5'
@@ -125,99 +122,8 @@ def main():
 
 
 	print(train_x.shape, train_y.shape, val_x.shape, val_y.shape)
-	
-if decision == 1:
-    print('standardising and normalising dataset to [-1,1]')
-
-    x_data_mag = train_x[:, 0:3]
-    x_data_phase = train_x[:, 3:]
-
-    x_data_mag -= np.mean(x_data_mag)
-    x_data_phase -= np.mean(x_data_phase)
-
-    # first 3 cols
-    minel = np.min(x_data_mag)
-    maxel = np.max(x_data_mag)
-    x_data_mag = scale_big_data(x_data_mag, minn=minel, maxx=maxel)
-
-    # last 3 cols
-    minel = np.min(x_data_phase)
-    maxel = np.max(x_data_phase)
-    x_data_phase = scale_big_data(x_data_phase, minn=minel, maxx=maxel)
-
-    train_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
-#############
-    x_data_mag = val_x[:, 0:3]
-    x_data_phase = val_x[:, 3:]
-
-    x_data_mag -= np.mean(x_data_mag)
-    x_data_phase -= np.mean(x_data_phase)
-
-    # first 3 cols
-    minel = np.min(x_data_mag)
-    maxel = np.max(x_data_mag)
-    x_data_mag = scale_big_data(x_data_mag, minn=minel, maxx=maxel)
-
-    # last 3 cols
-    minel = np.min(x_data_phase)
-    maxel = np.max(x_data_phase)
-    x_data_phase = scale_big_data(x_data_phase, minn=minel, maxx=maxel)
-
-    val_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
-
-    print(train_x.shape, val_x.shape)
 
 #############################################################################################
-
-if decision == 2:
-    print('standardising and normalising dataset to unit norm')
-
-    x_data_mag = train_x[:, 0:3]
-    x_data_phase = train_x[:, 3:]
-
-    x_data_mag -= np.mean(x_data_mag)
-    x_data_phase -= np.mean(x_data_phase)
-
-    x_data_mag /= np.std(x_data_mag)
-    x_data_phase /= np.std(x_data_phase)
-
-    train_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
-########
-    x_data_mag = val_x[:, 0:3]
-    x_data_phase = val_x[:, 3:]
-
-    x_data_mag -= np.mean(x_data_mag)
-    x_data_phase -= np.mean(x_data_phase)
-
-    x_data_mag /= np.std(x_data_mag)
-    x_data_phase /= np.std(x_data_phase)
-
-    val_x = np.concatenate((x_data_mag, x_data_phase), axis=1)
-
-    print(train_x.shape, val_x.shape)
-
-#############################################################################################
-
-	total_batches = train_x.shape[0]
-	
-	print('creating network')
-	inputs = Input(shape=(win_size, num_cols))
-
-	x = Conv1D(256, 200, padding="same", name="encoder_Conv1")(inputs)
-	x = MaxPooling1D(2, strides = 2, name= "encoder_max1")(x)
-
-	x = Conv1D(128, 200, padding="same", name="encoder_Conv2")(x)
-	x = MaxPooling1D(2, strides = 2, name= "encoder_max2")(x)
-
-	x = Conv1D(64, 200, padding="same", name="encoder_Conv3")(x)
-	x = MaxPooling1D(2, strides = 2, name= "encoder_max3")(x)
-
-	x = Conv1D(32, 200, padding="same", name="encoder_Conv4")(x)
-	encoder = MaxPooling1D(2, strides = 2, name= "encoder_max4")(x)
-
-	model = Model(inputs, x)
-	model.load_weights(filepath, by_name=True)
-	model.summary()
 	
 	num_cores = multiprocessing.cpu_count()
 
@@ -229,7 +135,6 @@ if decision == 2:
             y = train_y[i: i + batch_size]
 
             Parallel(n_jobs=num_cores)(delayed(graph_plot)(j, i, x, y) for j in range(x.shape[0]))
-            data_batch = model.predict_on_batch(x) 
 
             mean = np.mean(data_batch, axis = 1, keepdims=True)
             for j in range(data_batch.shape[0]):
@@ -245,4 +150,3 @@ if decision == 2:
 			
 if __name__ == "__main__": 
 	main()
-
