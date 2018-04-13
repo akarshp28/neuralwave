@@ -71,10 +71,8 @@ def main():
 	with h5py.File(srcdir , 'r') as hf:
         train_x = hf['train_x'][:]
         train_y = hf['train_y'][:]
-        val_x = hf['val_x'][:]
-        val_y = hf['val_y'][:]
 
-	print(train_x.shape, train_y.shape, val_x.shape, val_y.shape)
+	print(train_x.shape, train_y.shape)
 	
 	num_cores = multiprocessing.cpu_count()
 
