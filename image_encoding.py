@@ -22,9 +22,6 @@ srcdir = '/home/mlbots/neuralwave/dataset/data.h5'
 #destination filepath
 dstdir = './data/train'
 
-num_people = len(names)
-win_size = 90000
-num_cols = 6
 batch_size = 4
 
 def gadf(i, j, data_batch, label_batch):
@@ -69,8 +66,8 @@ def main():
 	print('importing dataset')
 
 	with h5py.File(srcdir , 'r') as hf:
-        train_x = hf['train_x'][:]
-        train_y = hf['train_y'][:]
+		train_x = hf['train_x'][:]
+		train_y = hf['train_y'][:]
 
 	print(train_x.shape, train_y.shape)
 	
