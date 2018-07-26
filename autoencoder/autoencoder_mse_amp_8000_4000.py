@@ -244,7 +244,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
                 batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True})
                 batch_time.append(time.time()-time_start)
 
-                test_writer.add_summary(summary, step)
+                test_writer.add_summary(summary, ((epoch-1)*test_steps)+step)
 
                 if (step == test_steps):
                     sys.stdout.write("\r - {}/{} - {} - loss: {:.4f}".format(step, test_steps, get_time(time.time()-epoch_time), batch_loss))
