@@ -124,7 +124,7 @@ def model():
     dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=num_classes)
     dataset = dataset.map(_parse_function)
     dataset = dataset.repeat(repeat)
-    dataset = dataset.shuffle(buffer_size=2000)
+    dataset = dataset.shuffle(buffer_size=1000)
     dataset = dataset.batch(batch_size)
     dataset = dataset.prefetch(4 * batch_size * num_gpus)
     iterator = dataset.make_initializable_iterator()
@@ -185,10 +185,10 @@ weight_path = "/home/kalvik/shared/neuralwave/autoencoder/weights/mse_amp_8000_4
 tensorboard_path = "/home/kalvik/shared/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
 sequence_length = 270
 input_width = 8000
-decay_rate = 0.9
+decay_rate = 0.96
 lstm_size = 4000
 batch_size = 8
-save_epoch = 5
+save_epoch = 2
 num_gpus = 4
 epochs = 10
 lr = 1e-4
