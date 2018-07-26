@@ -222,7 +222,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             sess.run(iterator.initializer, feed_dict={filenames: train_filenames})
             for step in range(1, train_steps + 1):
                 time_start = time.time()
-                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout=False})
+                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout:False})
                 batch_time.append(time.time()-time_start)
 
                 train_writer.add_summary(summary, g_step)
@@ -241,7 +241,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             sess.run(iterator.initializer, feed_dict={filenames: test_filenames})
             for step in range(1, test_steps + 1):
                 time_start = time.time()
-                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout=True})
+                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True})
                 batch_time.append(time.time()-time_start)
 
                 test_writer.add_summary(summary, step)
