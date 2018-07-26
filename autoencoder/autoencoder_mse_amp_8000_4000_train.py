@@ -101,7 +101,7 @@ def autoencoder(i, inputs, rollout):
     with tf.name_scope("loss_{}".format(i)):
         loss = tf.reduce_mean(tf.square(inputs-outputs))
 
-    return encoder_cell_states, loss
+    return encoder_cell_states, loss, outputs
 
 #function to read data in tfrecord files, convert to approiate format and reshape it
 def _parse_function(example_proto):
@@ -112,8 +112,6 @@ def _parse_function(example_proto):
     data = tf.reshape(data, [8000, 540])
 
     data = data[:, :270]
-    data.set_shape((input_width, sequence_length))
-
     label = tf.cast(parsed_features['label'], tf.int32)
     return data, label
 
@@ -154,7 +152,7 @@ def model():
                     inputs = tf.transpose(inputs, perm=[2, 0, 1])
                     inputs.set_shape([sequence_length, batch_size, input_width])
 
-                    encoder_cell_states, loss = autoencoder(i, inputs, rollout)
+                    encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout)
                     grads = opt.compute_gradients(loss)
                     tower_grads.append(grads)
                     losses.append(loss)
@@ -173,7 +171,7 @@ def model():
     merged = tf.summary.merge_all()
     init = tf.global_variables_initializer()
 
-    return init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout
+    return init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs
 
 train_path = "/home/kalvik/shared/CSI_DATA/tfrecords/train/"
 test_path = "/home/kalvik/shared/CSI_DATA/tfrecords/test/"
@@ -201,7 +199,7 @@ test_steps = int(test_samples//(batch_size*num_gpus))
 
 tf.reset_default_graph()
 with tf.Graph().as_default(), tf.device('/cpu:0'):
-    init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout = model()
+    init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs = model()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         if tf.train.latest_checkpoint(weight_path) != None:
