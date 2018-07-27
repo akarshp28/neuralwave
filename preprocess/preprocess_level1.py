@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from numpy.ctypeslib import ndpointer
-import multiprocessing as mp
+from multiprocessing import Process
 from ctypes import *
 import numpy as np
 import argparse
