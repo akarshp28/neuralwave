@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-import multiprocessing as mp
-from joblib import Parallel, delayed
 from numpy.ctypeslib import ndpointer
+import multiprocessing as mp
 from ctypes import *
 import numpy as np
 import argparse
@@ -290,7 +289,15 @@ def main(src_path, dest_path, jobs):
         if not os.path.exists(os.path.join(dest_path, class_name)):
             os.makedirs(os.path.join(dest_path, class_name))
 
-    _ = Parallel(n_jobs=jobs, verbose=1)(delayed(compute_data)(x[i], y_[i]) for i in range(len(x)))
+    procs = []
+
+    for i in range(len(x)):
+        proc = Process(target=compute_data, args=(x[i], y_[i]))
+        procs.append(proc)
+        proc.start()
+
+    for proc in procs:
+        proc.join()
 
 if __name__ == "__main__":
     args = parser.parse_args()
