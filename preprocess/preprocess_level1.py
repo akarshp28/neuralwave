@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import multiprocessing as mp
 from joblib import Parallel, delayed
 from numpy.ctypeslib import ndpointer
 from ctypes import *
@@ -9,7 +10,7 @@ import sys
 import os
 
 #ctypes module to call c++ functions
-lib = cdll.LoadLibrary('./libbfee.so')
+lib = cdll.LoadLibrary('/users/kjakkala/neuralwave/preprocess/libbfee.so')
 
 # Instantiate the parser
 parser = argparse.ArgumentParser()
