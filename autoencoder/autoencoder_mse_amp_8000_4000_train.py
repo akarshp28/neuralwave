@@ -118,15 +118,28 @@ def _parse_function(example_proto):
 #Trainable autoencoder model with multi gpu training support
 def model():
     #tf dataset to read tfrecord files
-    filenames = tf.placeholder(tf.string, shape=[None])
-    dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=num_classes)
-    dataset = dataset.map(_parse_function)
-    dataset = dataset.repeat(repeat)
-    dataset = dataset.shuffle(buffer_size=1000)
-    dataset = dataset.batch(batch_size)
-    dataset = dataset.prefetch(4 * batch_size * num_gpus)
-    iterator = dataset.make_initializable_iterator()
+    train_filenames = tf.placeholder(tf.string, shape=[None])
+    train_dataset = tf.data.TFRecordDataset(train_filenames, num_parallel_reads=num_classes)
+    train_dataset = train_dataset.map(_parse_function)
+    train_dataset = train_dataset.repeat(-1)
+    train_dataset = train_dataset.shuffle(buffer_size=train_samples)
+    train_dataset = train_dataset.batch(batch_size)
+    train_dataset = train_dataset.prefetch(4 * batch_size * num_gpus)
+    train_iterator = train_dataset.make_initializable_iterator()
 
+    test_filenames = tf.placeholder(tf.string, shape=[None])
+    test_dataset = tf.data.TFRecordDataset(test_filenames, num_parallel_reads=num_classes)
+    test_dataset = test_dataset.map(_parse_function)
+    test_dataset = test_dataset.repeat(-1)
+    test_dataset = test_dataset.shuffle(buffer_size=test_samples)
+    test_dataset = test_dataset.batch(batch_size)
+    test_dataset = test_dataset.prefetch(4 * batch_size * num_gpus)
+    test_iterator = test_dataset.make_initializable_iterator()
+
+    handle = tf.placeholder(tf.string, shape=[])
+    iterator = tf.data.Iterator.from_string_handle(handle,
+                                                   train_dataset.output_types,
+                                                   train_dataset.output_shapes)
     ## Optimizer
     global_step = tf.train.get_or_create_global_step()
     learning_rate = tf.train.exponential_decay(lr,
@@ -151,7 +164,6 @@ def model():
                     inputs, labels = iterator.get_next()
                     inputs = tf.transpose(inputs, perm=[2, 0, 1])
                     inputs.set_shape([sequence_length, batch_size, input_width])
-
                     encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout)
                     grads = opt.compute_gradients(loss)
                     tower_grads.append(grads)
@@ -171,13 +183,29 @@ def model():
     merged = tf.summary.merge_all()
     init = tf.global_variables_initializer()
 
-    return init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs
+    return  init,
+            merged,
+            saver,
+            global_step,
+            avg_loss,
+            apply_gradient_op,
+            encoder_cell_states,
+            labels,
+            train_iterator,
+            test_iterator,
+            train_filenames,
+            test_filenames,
+            handle,
+            rollout,
+            outputs
+
+#******************************************************************************
 
 train_path = "/home/kalvik/shared/CSI_DATA/tfrecords/train/"
 test_path = "/home/kalvik/shared/CSI_DATA/tfrecords/test/"
 
-train_filenames = [train_path+file for file in os.listdir(train_path)]
-test_filenames = [test_path+file for file in os.listdir(test_path)]
+train_files = [train_path+file for file in os.listdir(train_path)]
+test_files = [test_path+file for file in os.listdir(test_path)]
 
 weight_path = "/home/kalvik/shared/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
 tensorboard_path = "/home/kalvik/shared/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
@@ -190,7 +218,6 @@ save_epoch = 2
 num_gpus = 4
 epochs = 10
 lr = 1e-4
-repeat = -1
 train_samples = 1096
 test_samples = 194
 num_classes = len(train_filenames)
@@ -199,7 +226,10 @@ test_steps = int(test_samples//(batch_size*num_gpus))
 
 tf.reset_default_graph()
 with tf.Graph().as_default(), tf.device('/cpu:0'):
-    init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs = model()
+
+    init, merged, saver, global_step, avg_loss, apply_gradient_op,
+    encoder_cell_states, labels, train_iterator, test_iterator, train_filenames,
+    test_filenames, handle, rollout, outputs = model()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         if tf.train.latest_checkpoint(weight_path) != None:
@@ -210,17 +240,21 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
         train_writer = tf.summary.FileWriter(tensorboard_path+"train", sess.graph)
         test_writer = tf.summary.FileWriter(tensorboard_path+"test", sess.graph)
 
+        sess.run(train_iterator.initializer, feed_dict={train_filenames: train_files})
+        sess.run(test_iterator.initializer, feed_dict={test_filenames: test_files})
+
+        train_handle = sess.run(train_iterator.string_handle())
+        test_handle = sess.run(test_iterator.string_handle())
+
         for epoch in range(1, epochs + 1):
             print("\n\nEpoch {}/{}".format(epoch, epochs))
+            #Training
             batch_time = []
             epoch_time = time.time()
-
-            #Training
             print("Training:")
-            sess.run(iterator.initializer, feed_dict={filenames: train_filenames})
             for step in range(1, train_steps + 1):
                 time_start = time.time()
-                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout:False})
+                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout:False, handle:train_handle})
                 batch_time.append(time.time()-time_start)
 
                 train_writer.add_summary(summary, g_step)
@@ -231,15 +265,13 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
                     sys.stdout.write("\r - {}/{} - {} - loss: {:.4f}".format(step, train_steps, get_time(np.mean(batch_time)*(train_steps-step)), batch_loss))
                 sys.stdout.flush()
 
-
             #Testing
             batch_time = []
             epoch_time = time.time()
             print("\nTesting:")
-            sess.run(iterator.initializer, feed_dict={filenames: test_filenames})
             for step in range(1, test_steps + 1):
                 time_start = time.time()
-                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True})
+                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True, handle: test_handle})
                 batch_time.append(time.time()-time_start)
 
                 test_writer.add_summary(summary, ((epoch-1)*test_steps)+step)

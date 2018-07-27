@@ -140,7 +140,6 @@ def model():
                     inputs, labels = iterator.get_next()
                     inputs = tf.transpose(inputs, perm=[2, 0, 1])
                     inputs.set_shape([sequence_length, batch_size, input_width])
-
                     encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout)
                     losses.append(loss)
 
