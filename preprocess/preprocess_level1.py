@@ -292,7 +292,7 @@ def main(src_path, dest_path, jobs):
     procs = []
 
     for i in range(len(x)):
-        proc = Process(target=compute_data, args=(x[i], y_[i]))
+        proc = Process(target=compute_data, args=([x[i], y_[i]]))
         procs.append(proc)
         proc.start()
 
