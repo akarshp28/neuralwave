@@ -6,7 +6,8 @@ class bfee
 {
   public:
     void read_bfee(unsigned char *inBytes);
-
+    bfee();
+    
     unsigned int timestamp_low ;
   	unsigned short bfee_count;
   	unsigned int Nrx;
@@ -30,7 +31,7 @@ bfee::bfee()
   rssi_a = 0;
   rssi_b = 0;
   rssi_c = 0;
-  noise = '';
+  noise = '0';
   agc = 0;
   perm[0] = 0;
   perm[1] = 0;
