@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from numpy.ctypeslib import ndpointer
 from multiprocessing import Process
 from ctypes import *
@@ -17,18 +18,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--src',
                     help='path of raw .dat files folder',
                     required=False,
-                    default="/home/kalvik/shared/CSI_DATA/raw/")
+                    default="/users/kjakkala/neuralwave/data/CSI_DATA/")
 # Optional argument
 parser.add_argument('--dest',
                     help='path of destination folder',
                     required=False,
-                    default="/home/kalvik/shared/CSI_DATA/preprocessed_level1/")
-# Optional argument
-parser.add_argument('--jobs',
-                    type=int,
-                    help='number of jobs for parallization',
-                    required=False,
-                    default=16)
+                    default="/users/kjakkala/neuralwave/data/preprocessed_level1/")
 
 def phase_correction(ph_raw):
     m = np.arange(-28,29)
@@ -162,7 +157,7 @@ def get_scaled_csi(csi_st):
     return ret
 
 #call the computational routine in c++
-def read_bfee(byts):
+def read_bfee_c(byts):
     obj = lib.bfee_c()
     lib.read_bfee_c(obj, byts)
 
@@ -185,6 +180,50 @@ def read_bfee(byts):
     array["csi"] = np.flip(lib.get_csi(obj), 2)
 
     lib.del_obj(obj)
+
+    return array
+
+# The computational routine
+def read_bfee(inBytes):
+    array = {}
+
+    array["timestamp_low"] = c_double(inBytes[0] + (inBytes[1] << 8) +(inBytes[2] << 16) + (inBytes[3] << 24)).value
+    array["bfee_count"] = c_double(inBytes[4] + (inBytes[5] << 8)).value
+    array["Nrx"] = inBytes[8]
+    array["Ntx"] = inBytes[9]
+    array["rssi_a"] = c_double(inBytes[10]).value
+    array["rssi_b"] = c_double(inBytes[11]).value
+    array["rssi_c"] = c_double(inBytes[12]).value
+    array["noise"] = c_byte(inBytes[13]).value
+    array["agc"] = c_double(inBytes[14]).value
+    antenna_sel = inBytes[15]
+    length = inBytes[16] + (inBytes[17] << 8)
+    array["rate"] = c_double(inBytes[18] + (inBytes[19] << 8)).value
+    calc_len = int((30 * (array["Nrx"] * array["Ntx"] * 8 * 2 + 3) + 7) / 8)
+    payload = inBytes[20:]
+    csi = np.empty((array["Ntx"], array["Nrx"], 30), dtype=np.complex)
+    array["perm"] = []
+
+    # Check that length matches what it should
+    if (length != calc_len):
+        raise Exception("Wrong beamforming matrix size.")
+
+    # Compute CSI from all this crap :)
+    index = 0
+    for i in range(30):
+        index += 3
+        remainder = index % 8
+        for j in range(array["Ntx"]):
+                for k in range(array["Nrx"]):
+                    real = c_byte((payload[int(index / 8)]) >> remainder).value | c_byte((payload[int(index / 8 + 1)]) << (8-remainder)).value
+                    complx = c_byte((payload[int(index / 8 + 1)]) >> remainder).value | c_byte((payload[int(index / 8 + 2)]) << (8-remainder)).value
+                    csi[j, k, i] = complex(real, complx)
+                    index += 16;
+
+    array["perm"].append((antenna_sel) & 0x3)
+    array["perm"].append((antenna_sel >> 2) & 0x3)
+    array["perm"].append((antenna_sel >> 4) & 0x3)
+    array["csi"] = csi
 
     return array
 
@@ -275,6 +314,8 @@ def compute_data(file_path, class_sample_index):
     path, file = os.path.split(file_path)
     _, class_name = os.path.split(path)
 
+    dest_path = args.dest
+
     np.savetxt(os.path.join(os.path.join(dest_path, class_name), "{}{}.csv".format(class_name, str(class_sample_index))), np.concatenate((X_amp, X_ph), axis=-1), delimiter=",")
 
 def main(src_path, dest_path, jobs):
@@ -290,9 +331,8 @@ def main(src_path, dest_path, jobs):
             os.makedirs(os.path.join(dest_path, class_name))
 
     procs = []
-
     for i in range(len(x)):
-        proc = Process(target=compute_data, args=([x[i], y_[i]]))
+        proc = Process(target=compute_data, args=(x[i], y_[i]))
         procs.append(proc)
         proc.start()
 
@@ -301,4 +341,4 @@ def main(src_path, dest_path, jobs):
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    main(args.src, args.dest, args.jobs)
+    main(args.src, args.dest)
