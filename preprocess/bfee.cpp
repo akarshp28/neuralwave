@@ -21,6 +21,24 @@ class bfee
     complex<double> *csi;
 };
 
+bfee::bfee()
+{
+  timestamp_low = 0;
+  bfee_count = 0;
+  Nrx = 0;
+  Ntx = 0;
+  rssi_a = 0;
+  rssi_b = 0;
+  rssi_c = 0;
+  noise = '';
+  agc = 0;
+  perm[0] = 0;
+  perm[1] = 0;
+  perm[2] = 0;
+  rate = 0;
+  csi = NULL;
+}
+
 /* The computational routine */
 void bfee::read_bfee(unsigned char *inBytes)
 {
