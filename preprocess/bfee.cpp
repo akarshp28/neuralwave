@@ -7,7 +7,7 @@ class bfee
   public:
     void read_bfee(unsigned char *inBytes);
     bfee();
-    
+
     unsigned int timestamp_low ;
   	unsigned short bfee_count;
   	unsigned int Nrx;
@@ -21,24 +21,6 @@ class bfee
   	unsigned int rate;
     complex<double> *csi;
 };
-
-bfee::bfee()
-{
-  timestamp_low = 0;
-  bfee_count = 0;
-  Nrx = 0;
-  Ntx = 0;
-  rssi_a = 0;
-  rssi_b = 0;
-  rssi_c = 0;
-  noise = '0';
-  agc = 0;
-  perm[0] = 0;
-  perm[1] = 0;
-  perm[2] = 0;
-  rate = 0;
-  csi = NULL;
-}
 
 /* The computational routine */
 void bfee::read_bfee(unsigned char *inBytes)

@@ -183,7 +183,7 @@ def read_bfee_c(byts):
 
     return array
 
-# The computational routine
+# The computational routine in python
 def read_bfee(inBytes):
     array = {}
 
@@ -330,8 +330,6 @@ def main(src_path, dest_path):
         if not os.path.exists(os.path.join(dest_path, class_name)):
             os.makedirs(os.path.join(dest_path, class_name))
 
-    compute_data(x[0], y_[0])
-'''
     procs = []
     for i in range(len(x)):
         proc = Process(target=compute_data, args=(x[i], y_[i]))
@@ -340,7 +338,6 @@ def main(src_path, dest_path):
 
     for proc in procs:
         proc.join()
-'''
 
 if __name__ == "__main__":
     args = parser.parse_args()
