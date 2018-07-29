@@ -318,7 +318,7 @@ def compute_data(file_path, class_sample_index):
 
     np.savetxt(os.path.join(os.path.join(dest_path, class_name), "{}{}.csv".format(class_name, str(class_sample_index))), np.concatenate((X_amp, X_ph), axis=-1), delimiter=",")
 
-def main(src_path, dest_path, jobs):
+def main(src_path, dest_path):
     x, y = read_samples(src_path, ".dat")
     y_ = []
 
