@@ -4,8 +4,8 @@ clc
 close all
 warning off
 
-src_ = '/home/kalvik/shared/CSI_DATA/preprocessed_level1/';
-dest_dir = '/home/kalvik/shared/CSI_DATA/preprocessed_level2/';
+src_ = '/users/kjakkala/neuralwave/data/preprocess_level1/';
+dest_dir = '/users/kjakkala/neuralwave/data/preprocess_level2/';
 
 files = dir(src_);
 % remove `.` and `..`
