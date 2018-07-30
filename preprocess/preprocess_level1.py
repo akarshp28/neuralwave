@@ -1,29 +1,15 @@
 #!/usr/bin/env python3
 
 from numpy.ctypeslib import ndpointer
-from multiprocessing import Process
+from mpi4py import MPI
 from ctypes import *
 import numpy as np
-import argparse
 import time
 import sys
 import os
 
 #ctypes module to call c++ functions
 lib = cdll.LoadLibrary('/users/kjakkala/neuralwave/preprocess/libbfee.so')
-
-# Instantiate the parser
-parser = argparse.ArgumentParser()
-# Optional positional argument
-parser.add_argument('--src',
-                    help='path of raw .dat files folder',
-                    required=False,
-                    default="/users/kjakkala/neuralwave/data/CSI_DATA/")
-# Optional argument
-parser.add_argument('--dest',
-                    help='path of destination folder',
-                    required=False,
-                    default="/users/kjakkala/neuralwave/data/preprocessed_level1/")
 
 def phase_correction(ph_raw):
     m = np.arange(-28,29)
