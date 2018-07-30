@@ -304,6 +304,9 @@ def read_samples(dataset_path, endswith=".csv"):
     return datapaths, labels
 
 def compute_data(file_path, class_sample_index):
+    if (not os.path.isfile(file_path)):
+        raise ValueError("File dosn't exits")
+
     csi_trace = read_bf_file(file_path)[2000:10000]
     X_amp, X_ph = fill_gaps(csi_trace, technique='mean')
 
@@ -314,11 +317,20 @@ def compute_data(file_path, class_sample_index):
     path, file = os.path.split(file_path)
     _, class_name = os.path.split(path)
 
-    dest_path = args.dest
+    np.savetxt(os.path.join(os.path.join(dest_path, class_name), "{}{}.csv".format(class_name, str(cla$
 
-    np.savetxt(os.path.join(os.path.join(dest_path, class_name), "{}{}.csv".format(class_name, str(class_sample_index))), np.concatenate((X_amp, X_ph), axis=-1), delimiter=",")
+#******************************************************************************#
 
-def main(src_path, dest_path):
+src_path = "/users/kjakkala/neuralwave/data/CSI_DATA"
+dest_path = "/users/kjakkala/neuralwave/data/preprocess_level1"
+
+comm = MPI.COMM_WORLD
+size = comm.Get_size() # new: gives number of ranks in comm
+rank = comm.Get_rank()
+
+x = None
+y_ = None
+if (rank == 0):
     x, y = read_samples(src_path, ".dat")
     y_ = []
 
@@ -330,15 +342,13 @@ def main(src_path, dest_path):
         if not os.path.exists(os.path.join(dest_path, class_name)):
             os.makedirs(os.path.join(dest_path, class_name))
 
-    procs = []
-    for i in range(len(x)):
-        proc = Process(target=compute_data, args=(x[i], y_[i]))
-        procs.append(proc)
-        proc.start()
+    x = [x[i:i+(math.ceil(len(x)/size))] for i in range(0, len(x), math.ceil(len(x)/size))]
+    y_ = [y_[i:i+(math.ceil(len(y_)/size))] for i in range(0, len(y_), math.ceil(len(y_)/size))]
 
-    for proc in procs:
-        proc.join()
+x = comm.scatter(x, root=0)
+y_ = comm.scatter(y_, root=0)
 
-if __name__ == "__main__":
-    args = parser.parse_args()
-    main(args.src, args.dest)
+for i in range(len(x)):
+    compute_data(x[i], y_[i])
+
+print("finish rank:", rank)
