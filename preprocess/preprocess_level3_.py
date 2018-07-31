@@ -1,6 +1,6 @@
 import os
 import sys
-import shutil
+import math
 import numpy as np
 from mpi4py import MPI
 import tensorflow as tf
@@ -30,11 +30,11 @@ def _int64_feature(value):
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-def convert_to(data_paths, label, dest_path, class_name, min_, rng):
+def convert_to(data_paths, label, dest_path, class_name, min_, max_, scalers):
     """Converts a dataset to tfrecords."""
     filename = os.path.join(dest_path, class_name + '.tfrecords')
-    if not os.path.exists(os.path.join(dest_path)):
-        os.makedirs(os.path.join(dest_path))
+    if not os.path.exists(dest_path):
+        os.makedirs(dest_path)
 
     print('Writing', filename)
     with tf.python_io.TFRecordWriter(filename) as writer:
@@ -42,7 +42,7 @@ def convert_to(data_paths, label, dest_path, class_name, min_, rng):
             data_raw = np.loadtxt(open(data_paths[index], "rb"), delimiter=",").astype(np.float32)
             for i in range(540):
                 data_raw[:, i] = scalers[i].transform(np.expand_dims(data_raw[:, i], axis=0))
-            data_raw = (data_raw-min_)/rng
+            data_raw = (data_raw - min_)/(max_ - min_)
 
             example = tf.train.Example(
               features=tf.train.Features(
@@ -71,60 +71,59 @@ def scale_data(data_path):
     np.savetxt((os.path.join(os.path.join(dest_path, class_name), file)), array.astype(np.float32), delimiter=",")
 
 #******************************************************************************#
+
 src_path = "/users/kjakkala/neuralwave/data/preprocess_level2"
 dest_path = "/users/kjakkala/neuralwave/data/preprocess_level3"
+rows = 8000
+cols = 540
 
 comm = MPI.COMM_WORLD
-size = comm.Get_size() # new: gives number of ranks in comm
+size = comm.Get_size()
 rank = comm.Get_rank()
 
-tmp = None
-tmp_data = []
-train_tmp = None
-test_tmp = None
-
+train_sl = None
+train_array = None
+train_c = None
+test_c = None
 if (rank == 0):
+    X, y, classes = read_samples(src_path)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42)
+
+    print("train size:", len(X_train), "test size:", len(X_test))
+
+    train_sl = [X_train[i:i+(math.ceil(len(X_train)/size))] for i in range(0, len(X_train), math.ceil(len(X_train)/size))]
+    train_array = np.empty((size, math.ceil(len(X_train)/size), rows, cols), dtype=np.float32)
+
+#distribute data paths to processes
+train_sl = comm.scatter(train_sl, root=0)
+#read data with all processes
+sl_data = np.array([read_array(addr) for addr in train_sl], dtype=np.float32)
+#send data back to proc 1 from all other procs
+comm.Gatherv(sl_data, train_array, root=0)
+
+comm.Barrier() #wait for all procs to finish
+if (rank == 0):
+    train_array = np.reshape(train_array, (-1, rows, cols))[:len(X_train)]
+    scalers = [StandardScaler(with_std = False) for _ in range(cols)]
+    min = np.min(train_array)
+    max = np.max(train_array)
+
+    for i in range(cols):
+        scalers[i].fit(train_array[:, :, i])
+
     if not os.path.exists(os.path.join(dest_path, "train")):
         os.makedirs(os.path.join(dest_path, "train"))
     if not os.path.exists(os.path.join(dest_path, "test")):
         os.makedirs(os.path.join(dest_path, "test"))
 
-    X, y, classes = read_samples(src_path)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42)
-    num_classes = len(classes)
+    train_c = [[X_train[np.where( y_train == i )], i, os.path.join(dest_path, "train"), classes[i], min, max, scalers] for i in range(len(classes))]
+    test_c = [[X_test[np.where( y_test == i )], i,  os.path.join(dest_path, "test"), classes[i], min, max, scalers] for i in range(len(classes))]
 
-    print("train size:", len(X_train), "test size:", len(X_test))
-    print("Calculating scalers for training data")
+comm.Barrier() #wait for all procs to finish
 
-    scalers = []
-    for i in range(540):
-        scalers.append(StandardScaler(with_std = False))
+#distribute data paths to processes
+train_c = comm.scatter(train_c, root=0)
+convert_to(train_c[0], train_c[1], train_c[2], train_c[3], train_c[4], train_c[5], train_c[6])
 
-    tmp = X_train
-    tmp = [tmp[i:i+(math.ceil(len(tmp)/size))] for i in range(0, len(tmp), math.ceil(len(tmp)/size))]
-
-tmp = comm.scatter(tmp, root=0)
-arrays = [read_array(addr) for addr in tmp]
-tmp_data.extend(comm.gather(arrays, root=0))
-
-if (rank == 0):
-    tmp_data = np.array(tmp_data)
-    min_ = np.min(arrays)
-    max_ = np.max(arrays)
-
-    for j in range(540):
-        scalers[j].partial_fit(tmp_data[:, :, j])
-
-    rng = max_ - min_
-
-    train_tmp = []
-    test_tmp = []
-    for i in range(num_classes):
-        train_tmp.append([X_train[np.where( y_train == i ), i, classes[i], min_, rng])
-        test_tmp.append([X_test[np.where( y_test == i ), i, classes[i], min_, rng])
-
-train_tmp = comm.scatter(train_tmp, root=0)
-convert_to(train_tmp[0], train_tmp[1], os.path.join(dest_path, "train"), train_tmp[2])
-
-test_tmp = comm.scatter(test_tmp, root=0)
-convert_to(test_tmp[0], test_tmp[1], os.path.join(dest_path, "test"), test_tmp[2])
+test_c = comm.scatter(test_c, root=0)
+convert_to(test_c[0], test_c[1], test_c[2], test_c[3], test_c[4], test_c[5], test_c[6])
