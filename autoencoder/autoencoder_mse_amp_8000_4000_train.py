@@ -36,7 +36,7 @@ def average_gradients(tower_grads):
 
 #Seq2Seq Autoencoder with a single LSTM for both encoder and decoder,
 #along with optional rollout for the decoder LSTM
-def autoencoder(i, inputs, rollout):
+def autoencoder(i, inputs, rollout, keep_prob):
 
     #encoder lstm loop function, same as dynamic lstm in tf
     def encoder_loop_fn(time, cell_output, cell_state, loop_state):
@@ -68,7 +68,7 @@ def autoencoder(i, inputs, rollout):
         else:
             next_cell_state = cell_state
             next_input = tf.cond(rollout,
-                                 lambda: tf.layers.dense(cell_output, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE),
+                                 lambda: tf.nn.dropout(tf.layers.dense(cell_output, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE), keep_prob),
                                  lambda: inputs_ta.read(time-1))
 
         elements_finished = (time >= sequence_length)
@@ -94,7 +94,7 @@ def autoencoder(i, inputs, rollout):
 
         #convert lstm output array into a tensor
         outputs = decoder_hidden_states_ta.stack()
-        outputs = tf.layers.dense(outputs, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE)
+        outputs = tf.nn.dropout(tf.layers.dense(outputs, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE), keep_prob)
 
     #mean squared error loss
     with tf.name_scope("loss_{}".format(i)):
@@ -138,6 +138,7 @@ def model():
 
     #decoder lstm rollout state
     rollout = tf.placeholder(tf.bool)
+    keep_prob = tf.placeholder(tf.float32)
 
     #load model onto each gpu
     tower_grads = []
@@ -151,7 +152,7 @@ def model():
                     inputs = tf.transpose(inputs, perm=[2, 0, 1])
                     inputs.set_shape([sequence_length, batch_size, input_width])
 
-                    encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout)
+                    encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout, keep_prob)
                     grads = opt.compute_gradients(loss)
                     tower_grads.append(grads)
                     losses.append(loss)
@@ -170,7 +171,7 @@ def model():
     merged = tf.summary.merge_all()
     init = tf.global_variables_initializer()
 
-    return init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs
+    return init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob
 
 train_path = "/users/kjakkala/neuralwave/data/preprocess_level3/train"
 test_path = "/users/kjakkala/neuralwave/data/preprocess_level3/test/"
@@ -189,6 +190,7 @@ save_epoch = 2
 num_gpus = 8
 epochs = 30
 lr = 1e-4
+drop_keep = 0.8
 repeat = -1
 train_samples = 1096
 test_samples = 194
@@ -198,7 +200,7 @@ test_steps = int(test_samples//(batch_size*num_gpus))
 
 tf.reset_default_graph()
 with tf.Graph().as_default(), tf.device('/cpu:0'):
-    init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs = model()
+    init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob = model()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         if tf.train.latest_checkpoint(weight_path) != None:
@@ -219,7 +221,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             sess.run(iterator.initializer, feed_dict={filenames: train_filenames})
             for step in range(1, train_steps + 1):
                 time_start = time.time()
-                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout:False})
+                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout:False, keep_prob=drop_keep})
                 batch_time.append(time.time()-time_start)
 
                 train_writer.add_summary(summary, g_step)
@@ -238,7 +240,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             sess.run(iterator.initializer, feed_dict={filenames: test_filenames})
             for step in range(1, test_steps + 1):
                 time_start = time.time()
-                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True})
+                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True, keep_prob=1})
                 batch_time.append(time.time()-time_start)
 
                 test_writer.add_summary(summary, ((epoch-1)*test_steps)+step)
