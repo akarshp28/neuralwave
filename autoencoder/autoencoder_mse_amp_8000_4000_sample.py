@@ -39,7 +39,7 @@ def average_gradients(tower_grads):
 
 #Seq2Seq Autoencoder with a single LSTM for both encoder and decoder,
 #along with optional rollout for the decoder LSTM
-def autoencoder(i, inputs, rollout):
+def autoencoder(i, inputs, rollout, keep_prob):
 
     #encoder lstm loop function, same as dynamic lstm in tf
     def encoder_loop_fn(time, cell_output, cell_state, loop_state):
@@ -71,7 +71,7 @@ def autoencoder(i, inputs, rollout):
         else:
             next_cell_state = cell_state
             next_input = tf.cond(rollout,
-                                 lambda: tf.layers.dense(cell_output, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE),
+                                 lambda: tf.nn.dropout(tf.layers.dense(cell_output, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE), keep_prob),
                                  lambda: inputs_ta.read(time-1))
 
         elements_finished = (time >= sequence_length)
@@ -97,7 +97,7 @@ def autoencoder(i, inputs, rollout):
 
         #convert lstm output array into a tensor
         outputs = decoder_hidden_states_ta.stack()
-        outputs = tf.layers.dense(outputs, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE)
+        outputs = tf.nn.dropout(tf.layers.dense(outputs, input_width, activation=tf.nn.sigmoid, name="FC1", reuse=tf.AUTO_REUSE), keep_prob)
 
     #mean squared error loss
     with tf.name_scope("loss_{}".format(i)):
@@ -129,9 +129,9 @@ def model():
 
     #decoder lstm rollout state
     rollout = tf.placeholder(tf.bool)
+    keep_prob = tf.placeholder(tf.float32)
 
     #load model onto each gpu
-    losses = []
     with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
         for i in range(num_gpus):
             with tf.device('/gpu:%d' % i):
@@ -140,41 +140,40 @@ def model():
                     inputs, labels = iterator.get_next()
                     inputs = tf.transpose(inputs, perm=[2, 0, 1])
                     inputs.set_shape([sequence_length, batch_size, input_width])
-                    encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout)
-                    losses.append(loss)
 
-    #average loss for tensorboard
-    avg_loss = tf.reduce_mean(losses)
+                    encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout, keep_prob)
 
     #model saver, tensorboard, model initializer
     saver = tf.train.Saver(tf.global_variables())
     init = tf.global_variables_initializer()
 
-    return init, saver, avg_loss, encoder_cell_states, labels, iterator, filenames, rollout, outputs
+    return init, saver, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob
 
-train_path = "/home/kalvik/shared/CSI_DATA/tfrecords/train/"
-test_path = "/home/kalvik/shared/CSI_DATA/tfrecords/test/"
-weight_path = "/home/kalvik/shared/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
-data_path = "/home/mse_amp_8000_4000_encoded.h5"
-
+train_path = "/users/kjakkala/neuralwave/data/preprocess_level3/train/"
+test_path = "/users/kjakkala/neuralwave/data/preprocess_level3/test/"
+weight_path = "/users/kjakkala/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
+tensorboard_path = "/users/kjakkala/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
+data_path = "/users/kjakkala/neuralwave/data/encoded_amp.h5"
 train_filenames = [train_path+file for file in os.listdir(train_path)]
 test_filenames = [test_path+file for file in os.listdir(test_path)]
 sequence_length = 270
 input_width = 8000
 lstm_size = 4000
-batch_size = 8
-num_gpus = 1
+batch_size = 16
+save_epoch = 2
+num_gpus = 8
+epochs = 30
+lr = 1e-4
 train_samples = 1096
 test_samples = 194
 num_classes = len(train_filenames)
 train_steps = int(train_samples//(batch_size*num_gpus))
 test_steps = int(test_samples//(batch_size*num_gpus))
-batch_time = []
 X, y = list(), list()
 
 tf.reset_default_graph()
 with tf.Graph().as_default(), tf.device('/cpu:0'):
-    init, saver, avg_loss, encoder_cell_states, labels, iterator, filenames, rollout, outputs = model()
+    init, saver, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob = model()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         saver.restore(sess, tf.train.latest_checkpoint(weight_path))
@@ -183,7 +182,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
         sess.run(iterator.initializer, feed_dict={filenames: train_filenames})
         for step in range(1, train_steps + 1):
             time_start = time.time()
-            x_temp, y_temp = sess.run([encoder_cell_states, labels], feed_dict={rollout:True})
+            x_temp, y_temp = sess.run([encoder_cell_states, labels], feed_dict={rollout:True, keep_prob:1})
             batch_time.append(time.time()-time_start)
             X.expand(x_temp)
             y.expand(y_temp)
@@ -193,7 +192,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
         sess.run(iterator.initializer, feed_dict={filenames: test_filenames})
         for step in range(1, test_steps + 1):
             time_start = time.time()
-            x_temp, y_temp = sess.run([encoder_cell_states, labels], feed_dict={rollout:True})
+            x_temp, y_temp = sess.run([encoder_cell_states, labels], feed_dict={rollout:True, keep_prob:1})
             batch_time.append(time.time()-time_start)
             X.expand(x_temp)
             y.expand(y_temp)
@@ -202,6 +201,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
 
 X = np.array(X)
 y = np.array(y)
+
 hf = h5py.File(data_path, 'w')
 hf.create_dataset('X', data=X)
 hf.create_dataset('y', data=y)
