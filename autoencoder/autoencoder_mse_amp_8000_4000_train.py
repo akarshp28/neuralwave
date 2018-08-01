@@ -173,7 +173,7 @@ def model():
 
     return init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob
 
-train_path = "/users/kjakkala/neuralwave/data/preprocess_level3/train"
+train_path = "/users/kjakkala/neuralwave/data/preprocess_level3/train/"
 test_path = "/users/kjakkala/neuralwave/data/preprocess_level3/test/"
 
 train_filenames = [train_path+file for file in os.listdir(train_path)]
@@ -221,7 +221,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             sess.run(iterator.initializer, feed_dict={filenames: train_filenames})
             for step in range(1, train_steps + 1):
                 time_start = time.time()
-                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout:False, keep_prob=drop_keep})
+                _, batch_loss, summary, g_step = sess.run([apply_gradient_op, avg_loss, merged, global_step], feed_dict={rollout:False, keep_prob:drop_keep})
                 batch_time.append(time.time()-time_start)
 
                 train_writer.add_summary(summary, g_step)
@@ -240,7 +240,7 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             sess.run(iterator.initializer, feed_dict={filenames: test_filenames})
             for step in range(1, test_steps + 1):
                 time_start = time.time()
-                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True, keep_prob=1})
+                batch_loss, summary = sess.run([avg_loss, merged], feed_dict={rollout:True, keep_prob:1})
                 batch_time.append(time.time()-time_start)
 
                 test_writer.add_summary(summary, ((epoch-1)*test_steps)+step)
