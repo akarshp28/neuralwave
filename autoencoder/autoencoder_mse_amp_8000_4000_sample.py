@@ -2,11 +2,10 @@
 import tensorflow as tf
 import numpy as np
 import random
-import h5py
 import time
+import h5py
 import sys
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 #convert time in seconds to minutes and hours
 def get_time(time):
@@ -16,7 +15,6 @@ def get_time(time):
         string = "{:.0f}m".format(time/60)
     else:
         string = "{:.2f}h".format(time/60/60)
-
     return string
 
 # see https://github.com/tensorflow/models/blob/master/tutorials/image/cifar10/cifar10_multi_gpu_train.py#L101
@@ -127,11 +125,23 @@ def model():
     dataset = dataset.prefetch(4 * batch_size * num_gpus)
     iterator = dataset.make_initializable_iterator()
 
+    ## Optimizer
+    global_step = tf.train.get_or_create_global_step()
+    learning_rate = tf.train.exponential_decay(lr,
+                                               global_step,
+                                               train_steps,
+                                               decay_rate,
+                                               staircase=True)
+    tf.summary.scalar("learning_rate", learning_rate)
+    opt = tf.train.AdamOptimizer(learning_rate=learning_rate)
+
     #decoder lstm rollout state
     rollout = tf.placeholder(tf.bool)
     keep_prob = tf.placeholder(tf.float32)
 
     #load model onto each gpu
+    tower_grads = []
+    losses = []
     with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
         for i in range(num_gpus):
             with tf.device('/gpu:%d' % i):
@@ -142,38 +152,53 @@ def model():
                     inputs.set_shape([sequence_length, batch_size, input_width])
 
                     encoder_cell_states, loss, outputs = autoencoder(i, inputs, rollout, keep_prob)
+                    grads = opt.compute_gradients(loss)
+                    tower_grads.append(grads)
+                    losses.append(loss)
+
+    #average gradients from each gpu model and backpropogate
+    gradients = average_gradients(tower_grads)
+    global_step = tf.train.get_or_create_global_step()
+    apply_gradient_op = opt.apply_gradients(gradients, global_step)
+
+    #average loss for tensorboard
+    avg_loss = tf.reduce_mean(losses)
+    tf.summary.scalar("avg_loss", avg_loss)
 
     #model saver, tensorboard, model initializer
     saver = tf.train.Saver(tf.global_variables())
+    merged = tf.summary.merge_all()
     init = tf.global_variables_initializer()
 
-    return init, saver, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob
+    return init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob
 
 train_path = "/users/kjakkala/neuralwave/data/preprocess_level3/train/"
 test_path = "/users/kjakkala/neuralwave/data/preprocess_level3/test/"
-weight_path = "/users/kjakkala/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
-tensorboard_path = "/users/kjakkala/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
-data_path = "/users/kjakkala/neuralwave/data/encoded_amp.h5"
+
 train_filenames = [train_path+file for file in os.listdir(train_path)]
 test_filenames = [test_path+file for file in os.listdir(test_path)]
+
+weight_path = "/users/kjakkala/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
+tensorboard_path = "/users/kjakkala/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
 sequence_length = 270
 input_width = 8000
+decay_rate = 0.96
 lstm_size = 4000
-batch_size = 16
-save_epoch = 2
-num_gpus = 8
-epochs = 30
+batch_size = 1
+num_gpus = 1
 lr = 1e-4
-train_samples = 1096
-test_samples = 194
+train_samples = 1107
+test_samples = 196
 num_classes = len(train_filenames)
 train_steps = int(train_samples//(batch_size*num_gpus))
 test_steps = int(test_samples//(batch_size*num_gpus))
+
 X, y = list(), list()
+batch_time = []
 
 tf.reset_default_graph()
 with tf.Graph().as_default(), tf.device('/cpu:0'):
-    init, saver, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob = model()
+    init, merged, saver, global_step, avg_loss, apply_gradient_op, encoder_cell_states, labels, iterator, filenames, rollout, outputs, keep_prob = model()
 
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         saver.restore(sess, tf.train.latest_checkpoint(weight_path))
@@ -184,9 +209,9 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             time_start = time.time()
             x_temp, y_temp = sess.run([encoder_cell_states, labels], feed_dict={rollout:True, keep_prob:1})
             batch_time.append(time.time()-time_start)
-            X.expand(x_temp)
-            y.expand(y_temp)
-            print("Batch Time: {}, Step: {}".format(get_time(mean(batch_time)), step))
+            X.append(x_temp)
+            y.append(y_temp)
+            print("Batch Time: {}, Step: {}".format(get_time(np.mean(batch_time)), step))
 
         print("\nstarted sampling testing data:")
         sess.run(iterator.initializer, feed_dict={filenames: test_filenames})
@@ -194,15 +219,18 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
             time_start = time.time()
             x_temp, y_temp = sess.run([encoder_cell_states, labels], feed_dict={rollout:True, keep_prob:1})
             batch_time.append(time.time()-time_start)
-            X.expand(x_temp)
-            y.expand(y_temp)
-            print("Batch Time: {}, Step: {}".format(get_time(mean(batch_time)), step))
+            X.append(x_temp)
+            y.append(y_temp)
+            print("Batch Time: {}, Step: {}".format(get_time(np.mean(batch_time)), step))
         print("\nFinished!")
 
 X = np.array(X)
 y = np.array(y)
 
-hf = h5py.File(data_path, 'w')
+print(X.shape, y.shape)
+
+hf = h5py.File("/users/kjakkala/neuralwave/data/amp_encoded.h5", 'w')
 hf.create_dataset('X', data=X)
 hf.create_dataset('y', data=y)
 hf.close()
+
