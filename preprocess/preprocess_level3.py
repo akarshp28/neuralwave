@@ -1,31 +1,11 @@
 import os
 import sys
-import shutil
-import argparse
+import math
 import numpy as np
+from mpi4py import MPI
 import tensorflow as tf
-from joblib import Parallel, delayed
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-
-# Instantiate the parser
-parser = argparse.ArgumentParser()
-# Optional positional argument
-parser.add_argument('--src',
-                    help='path of raw .dat files folder',
-                    required=False,
-                    default="/home/kalvik/shared/CSI_DATA/preprocessed_level2/")
-# Optional argument
-parser.add_argument('--dest',
-                    help='path of destination folder',
-                    required=False,
-                    default="/home/kalvik/shared/CSI_DATA/tfrecords/")
-# Optional argument
-parser.add_argument('--jobs',
-                    type=int,
-                    help='number of jobs for parallization',
-                    required=False,
-                    default=16)
 
 def read_samples(dataset_path, endswith=".csv"):
     datapaths, labels = list(), list()
@@ -50,11 +30,11 @@ def _int64_feature(value):
 def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-def convert_to(data_paths, label, dest_path, class_name):
+def convert_to(data_paths, label, dest_path, class_name, min_, max_, scalers):
     """Converts a dataset to tfrecords."""
     filename = os.path.join(dest_path, class_name + '.tfrecords')
-    if not os.path.exists(os.path.join(dest_path)):
-        os.makedirs(os.path.join(dest_path))
+    if not os.path.exists(dest_path):
+        os.makedirs(dest_path)
 
     print('Writing', filename)
     with tf.python_io.TFRecordWriter(filename) as writer:
@@ -62,7 +42,7 @@ def convert_to(data_paths, label, dest_path, class_name):
             data_raw = np.loadtxt(open(data_paths[index], "rb"), delimiter=",").astype(np.float32)
             for i in range(540):
                 data_raw[:, i] = scalers[i].transform(np.expand_dims(data_raw[:, i], axis=0))
-            data_raw = (data_raw-min_)/rng
+            data_raw = (data_raw - min_)/(max_ - min_)
 
             example = tf.train.Example(
               features=tf.train.Features(
@@ -72,12 +52,8 @@ def convert_to(data_paths, label, dest_path, class_name):
                   }))
             writer.write(example.SerializeToString())
 
-            sys.stdout.write("\r{}/{}".format(len(data_paths), index+1))
-            sys.stdout.flush()
-    print("\n")
-
 def read_array(data_path):
-    return np.loadtxt(open(data_path, "rb"), delimiter=",")
+    return np.loadtxt(open(data_path, "rb"), delimiter=",", dtype=np.float32)
 
 def scale_data(data_path):
     array = np.loadtxt(open(data_path, "rb"), delimiter=",")
@@ -90,44 +66,92 @@ def scale_data(data_path):
 
     np.savetxt((os.path.join(os.path.join(dest_path, class_name), file)), array.astype(np.float32), delimiter=",")
 
-def main(src_path, dest_path, n_jobs):
-    X, y, classes = read_samples(src_path)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42)
-    num_classes = len(classes)
+#******************************************************************************#
 
+src_path = "/users/kjakkala/neuralwave/data/preprocess_level2"
+dest_path = "/users/kjakkala/neuralwave/data/preprocess_level3"
+rows = 8000
+cols = 540
+
+comm = MPI.COMM_WORLD
+size = comm.Get_size()
+rank = comm.Get_rank()
+
+X, y, classes = read_samples(src_path)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random_state=42)
+
+num_sl = math.floor(len(X_train)/size)
+train_sl = [None for _ in range(num_sl)]
+train_array = None
+
+data_c_len = None
+data_c = [None for _ in range(len(classes)*2)]
+
+if (rank == 0):
     print("train size:", len(X_train), "test size:", len(X_test))
-    print("Calculating scalers for training data")
-    scalers = []
+
+    train_sl = [X_train[i:i+size] for i in range(0, len(X_train), size)]
+    train_array = np.empty((size, rows, cols), dtype=np.float32)
+    
+    if (len(train_sl[-1]) != size):    
+        last_sl = train_sl[-1]
+        del train_sl[-1]
+
+    scalers = [StandardScaler(with_std = False) for _ in range(cols)]
+
     min_ = float('Inf')
     max_ = -float('Inf')
-    for i in range(540):
-        scalers.append(StandardScaler(with_std = False))
 
-    for i in range(0, len(X_train), jobs):
-        arrays = Parallel(n_jobs=jobs, verbose=0)(delayed(read_array)(addr) for addr in X_train[i:i+jobs-1])
-        arrays = np.array(arrays)
-        min_temp = np.min(arrays)
-        max_temp = np.max(arrays)
+for index in range(num_sl):
+    addr = comm.scatter(train_sl[index], root=0)
+    comm.Gatherv(np.expand_dims(read_array(addr), axis=0), train_array, root=0)
+
+    if (rank == 0):
+        for i in range(cols):
+            scalers[i].partial_fit(train_array[:, :, i])
+
+        min_temp = np.min(train_array)
+        max_temp = np.max(train_array)
+
         min_ = min(min_temp, min_)
         max_ = max(max_temp, max_)
 
-        for j in range(540):
-            scalers[j].partial_fit(arrays[:, :, j])
+if (rank == 0):
+    train_array = np.array([read_array(addr) for addr in last_sl])
+    
+    for i in range(cols):
+        scalers[i].partial_fit(train_array[:, :, i])
 
-        sys.stdout.write("\r{}/{}".format(len(X_train), i+arrays.shape[0]))
-        sys.stdout.flush()
+    min_temp = np.min(train_array)
+    max_temp = np.max(train_array)
 
-    rng = max_ - min_
-    print("range: ", rng)
+    min_ = min(min_temp, min_)
+    max_ = max(max_temp, max_)
 
     if not os.path.exists(os.path.join(dest_path, "train")):
         os.makedirs(os.path.join(dest_path, "train"))
     if not os.path.exists(os.path.join(dest_path, "test")):
         os.makedirs(os.path.join(dest_path, "test"))
+    
+    data_tmp = [[X_train[np.where( y_train == i )], i, os.path.join(dest_path, "train"), classes[i], min_, max_, scalers] for i in range(len(classes))]
+    data_tmp.extend([X_test[np.where( y_test == i )], i, os.path.join(dest_path, "test"), classes[i], min_, max_, scalers] for i in range(len(classes)))
+    data_c = [data_tmp[i:i+size] for i in range(0, len(data_tmp), size)]
 
-    _ = Parallel(n_jobs=jobs, verbose=0)(delayed(convert_to)(X_train[np.where( y_train == i )], i,  os.path.join(dest_path, "train"), classes[i]) for i in range(num_classes))
-    _ = Parallel(n_jobs=jobs, verbose=0)(delayed(convert_to)(X_test[np.where( y_test == i )], i,  os.path.join(dest_path, "test"), classes[i]) for i in range(num_classes))
+    if (len(data_c[-1]) < size):
+        data_c_last = data_c[-1]
+        del data_c[-1]
 
-if __name__ == "__main__":
-    args = parser.parse_args()
-    main(args.src, args.dest, args.jobs)
+    data_c_len = len(data_c)
+
+data_c_len = comm.bcast(data_c_len, root=0)
+
+for i in range(data_c_len):
+    data_tmp = comm.scatter(data_c[i], root=0)
+    convert_to(data_tmp[0], data_tmp[1], data_tmp[2], data_tmp[3], data_tmp[4], data_tmp[5], data_tmp[6])
+
+if (rank == 0):
+    if (len(data_c_last) >= 1):
+        for tmp in data_c_last:
+            convert_to(data_tmp[0], data_tmp[1], data_tmp[2], data_tmp[3], data_tmp[4], data_tmp[5], data_tmp[6])
+
+ 
