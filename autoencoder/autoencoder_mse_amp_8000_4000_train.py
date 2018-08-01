@@ -179,7 +179,7 @@ def model():
     tf.summary.scalar("avg_loss", avg_loss)
 
     #model saver, tensorboard, model initializer
-    saver = tf.train.Saver(tf.global_variables(), max_to_keep=5)
+    saver = tf.train.Saver(tf.global_variables())
     merged = tf.summary.merge_all()
     init = tf.global_variables_initializer()
 
@@ -201,22 +201,22 @@ def model():
 
 #******************************************************************************
 
-train_path = "/home/kalvik/shared/CSI_DATA/tfrecords/train/"
-test_path = "/home/kalvik/shared/CSI_DATA/tfrecords/test/"
+train_path = "/users/kjakkala/neuralwave/data/preprocess_level3/train/"
+test_path = "/users/kjakkala/neuralwave/data/preprocess_level3/test/"
 
 train_files = [train_path+file for file in os.listdir(train_path)]
 test_files = [test_path+file for file in os.listdir(test_path)]
 
-weight_path = "/home/kalvik/shared/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
-tensorboard_path = "/home/kalvik/shared/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
+weight_path = "/users/kjakkala/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
+tensorboard_path = "/users/kjakkala/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
 sequence_length = 270
 input_width = 8000
 decay_rate = 0.96
 lstm_size = 4000
-batch_size = 8
+batch_size = 16
 save_epoch = 2
 num_gpus = 4
-epochs = 10
+epochs = 30
 lr = 1e-4
 train_samples = 1096
 test_samples = 194
