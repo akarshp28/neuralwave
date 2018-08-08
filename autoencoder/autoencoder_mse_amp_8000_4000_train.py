@@ -179,8 +179,8 @@ test_path = "/users/kjakkala/neuralwave/data/preprocess_level3/test/"
 train_filenames = [train_path+file for file in os.listdir(train_path)]
 test_filenames = [test_path+file for file in os.listdir(test_path)]
 
-weight_path = "/users/kjakkala/neuralwave/autoencoder/weights/mse_amp_8000_4000/"
-tensorboard_path = "/users/kjakkala/neuralwave/autoencoder/tensorboard/mse_amp_8000_4000_"
+weight_path = "/users/kjakkala/neuralwave/weights/mse_amp_8000_4000/"
+tensorboard_path = "/users/kjakkala/neuralwave/tensorboard/mse_amp_8000_4000_"
 sequence_length = 270
 input_width = 8000
 decay_rate = 0.96
