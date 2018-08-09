@@ -23,9 +23,9 @@ def get_time(time):
 
 def identity_block(input_tensor, kernel_size, filters, stage, block, training):
     with tf.name_scope("stage-{}_block-{}".format(stage, block)):
-        x = tf.layers.batch_normalization(x, training=training)
+        x = tf.layers.batch_normalization(input_tensor, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(input_tensor, filters[0], 1, padding="same")
+        x = tf.layers.conv2d(x, filters[0], 1, padding="same")
 
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
@@ -40,9 +40,9 @@ def identity_block(input_tensor, kernel_size, filters, stage, block, training):
 
 def conv_block(input_tensor, kernel_size, filters, stage, block, training, strides=(2, 2)):
     with tf.name_scope("stage-{}_block-{}".format(stage, block)):
-        x = tf.layers.batch_normalization(x, training=training)
+        x = tf.layers.batch_normalization(input_tensor, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(input_tensor, filters[0], 1, strides=strides, padding="same")
+        x = tf.layers.conv2d(x, filters[0], 1, strides=strides, padding="same")
 
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
@@ -52,9 +52,9 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, training, strid
         x = tf.nn.relu(x)
         x = tf.layers.conv2d(x, filters[2], 1, padding="same")
 
-        shortcut = tf.layers.batch_normalization(shortcut, training=training)
+        shortcut = tf.layers.batch_normalization(input_tensor, training=training)
         shortcut = tf.nn.relu(shortcut)
-        shortcut = tf.layers.conv2d(input_tensor, filters[2], 1, strides=strides, padding="same")
+        shortcut = tf.layers.conv2d(shortcut, filters[2], 1, strides=strides, padding="same")
 
         x = tf.add(x, shortcut)
     return x
@@ -62,9 +62,9 @@ def conv_block(input_tensor, kernel_size, filters, stage, block, training, strid
 def classifier(i, inputs, labels, is_training):
     with tf.name_scope('resnet50_{}'.format(i)):
         with tf.name_scope("stage-1_block-a"):
+            x = tf.layers.conv2d(inputs, 64, 7, strides=2, padding="same")
             x = tf.layers.batch_normalization(x, training=is_training)
             x = tf.nn.relu(x)
-            x = tf.layers.conv2d(inputs, 64, 7, strides=2, padding="same")
             x = tf.layers.max_pooling2d(x, 3, strides=(2, 2), padding="same")
 
         x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', training=is_training)
