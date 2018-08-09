@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
+from tensorflow.python.client import device_lib
 import tensorflow as tf
 import numpy as np
 import random
 import time
 import sys
 import os
-from tensorflow.python.client import device_lib
 
 def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
@@ -81,9 +81,9 @@ def classifier(i, inputs, labels, is_training):
         x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b', training=is_training)
         x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c', training=is_training)
 
-        x = tf.layers.max_pooling2d(x, (125, 9), 1)
+        x = tf.layers.max_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1)
         x = tf.layers.flatten(inputs)
-        logits = tf.layers.dense(x, 30)
+        logits = tf.layers.dense(x, num_classes)
 
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits)
         loss = tf.reduce_mean(cross_entropy)
@@ -103,7 +103,7 @@ def _parse_function(example_proto):
     data = tf.expand_dims(data, axis=-1)
 
     label = tf.cast(parsed_features['label'], tf.int32)
-    label = tf.one_hot(label, 30)
+    label = tf.one_hot(label, num_classes)
     return data, label
 
 #Trainable autoencoder model with multi gpu training support
@@ -112,10 +112,10 @@ def model():
     filenames = tf.placeholder(tf.string, shape=[None])
     dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=num_classes)
     dataset = dataset.map(_parse_function)
-    dataset = dataset.repeat(repeat)
-    dataset = dataset.shuffle(buffer_size=1000)
+    dataset = dataset.repeat(-1)
+    dataset = dataset.shuffle(buffer_size=train_samples)
     dataset = dataset.batch(batch_size)
-    dataset = dataset.prefetch(4 * batch_size * num_gpus)
+    dataset = dataset.prefetch(1 * batch_size * num_gpus)
     iterator = dataset.make_initializable_iterator()
 
     is_training = tf.placeholder(tf.bool)
@@ -157,22 +157,21 @@ def model():
 
     return init, merged, saver, global_step, avg_loss, avg_acc, apply_gradient_op, labels, iterator, filenames, is_training
 
-train_path = "/users/kjakkala/neuralwave/data/preprocess_level3/train/"
-test_path = "/users/kjakkala/neuralwave/data/preprocess_level3/test/"
+train_path = "/scratch/kjakkala/preprocess_level3/train/"
+test_path = "/scratch/kjakkala/preprocess_level3/test/"
 
 train_filenames = [train_path+file for file in os.listdir(train_path)]
 test_filenames = [test_path+file for file in os.listdir(test_path)]
 
-weight_path = "/users/kjakkala/neuralwave/weights/"
-tensorboard_path = "/users/kjakkala/neuralwave/tensorboard/"
+weight_path = "/scratch/kjakkala/weights/resnet/"
+tensorboard_path = "/scratch/kjakkala/tensorboard/resnet_"
 sequence_length = 8000
 input_width = 540
 decay_rate = 0.96
-batch_size = 4
+batch_size = 32
 save_epoch = 2
-epochs = 30
+epochs = 50
 lr = 1e-4
-repeat = -1
 train_samples = 1096
 test_samples = 194
 num_gpus = get_available_gpus()
