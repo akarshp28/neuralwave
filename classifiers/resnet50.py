@@ -11,7 +11,7 @@ def get_available_gpus():
     local_device_protos = device_lib.list_local_devices()
     return len([x.name for x in local_device_protos if x.device_type == 'GPU'])
 
-#convert time in seconds to minutes and hours
+#convert time in seconds to minutes or hours
 def get_time(time):
     if time < 60:
         string = "{:.0f}s".format(time)
@@ -25,36 +25,36 @@ def identity_block(input_tensor, kernel_size, filters, stage, block, training):
     with tf.name_scope("stage-{}_block-{}".format(stage, block)):
         x = tf.layers.batch_normalization(input_tensor, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(x, filters[0], 1, padding="same")
+        x = tf.layers.conv2d(x, filters[0], kernel_size[0], padding="same")
 
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(x, filters[1], kernel_size, padding="same")
+        x = tf.layers.conv2d(x, filters[1], kernel_size[1], padding="same")
 
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(x, filters[2], 1, padding="same")
+        x = tf.layers.conv2d(x, filters[2], kernel_size[2], padding="same")
 
         x = tf.add(x, input_tensor)
     return x
 
-def conv_block(input_tensor, kernel_size, filters, stage, block, training, strides=(2, 2)):
+def conv_block(input_tensor, kernel_size, filters, stage, block, training, strides=2):
     with tf.name_scope("stage-{}_block-{}".format(stage, block)):
         x = tf.layers.batch_normalization(input_tensor, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(x, filters[0], 1, strides=strides, padding="same")
+        x = tf.layers.conv2d(x, filters[0], kernel_size[0], strides=strides, padding="same")
 
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(x, filters[1], kernel_size, padding="same")
+        x = tf.layers.conv2d(x, filters[1], kernel_size[1], padding="same")
 
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
-        x = tf.layers.conv2d(x, filters[2], 1, padding="same")
+        x = tf.layers.conv2d(x, filters[2], kernel_size[2], padding="same")
 
         shortcut = tf.layers.batch_normalization(input_tensor, training=training)
         shortcut = tf.nn.relu(shortcut)
-        shortcut = tf.layers.conv2d(shortcut, filters[2], 1, strides=strides, padding="same")
+        shortcut = tf.layers.conv2d(shortcut, filters[2], kernel_size[2], strides=strides, padding="same")
 
         x = tf.add(x, shortcut)
     return x
@@ -65,31 +65,31 @@ def classifier(i, inputs, labels, is_training):
             x = tf.layers.conv2d(inputs, 64, 7, strides=2, padding="same")
             x = tf.layers.batch_normalization(x, training=is_training)
             x = tf.nn.relu(x)
-            x = tf.layers.max_pooling2d(x, 3, strides=(2, 2), padding="same")
+            x = tf.layers.max_pooling2d(x, 3, strides=2, padding="same")
 
-        x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', training=is_training)
-        x = identity_block(x, 3, [64, 64, 256], stage=2, block='b', training=is_training)
-        x = identity_block(x, 3, [64, 64, 256], stage=2, block='c', training=is_training)
+        x = conv_block    (x, [1, 3, 1], [64, 64, 256], stage=2, block='a', training=is_training)
+        x = identity_block(x, [1, 3, 1], [64, 64, 256], stage=2, block='b', training=is_training)
+        x = identity_block(x, [1, 3, 1], [64, 64, 256], stage=2, block='c', training=is_training)
 
-        x = conv_block(x, 3, [128, 128, 512], stage=3, block='a', training=is_training)
-        x = identity_block(x, 3, [128, 128, 512], stage=3, block='b', training=is_training)
-        x = identity_block(x, 3, [128, 128, 512], stage=3, block='c', training=is_training)
-        x = identity_block(x, 3, [128, 128, 512], stage=3, block='d', training=is_training)
+        x = conv_block    (x, [1, 3, 1], [128, 128, 512], stage=3, block='a', training=is_training)
+        x = identity_block(x, [1, 3, 1], [128, 128, 512], stage=3, block='b', training=is_training)
+        x = identity_block(x, [1, 3, 1], [128, 128, 512], stage=3, block='c', training=is_training)
+        x = identity_block(x, [1, 3, 1], [128, 128, 512], stage=3, block='d', training=is_training)
 
-        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a', training=is_training)
-        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b', training=is_training)
-        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c', training=is_training)
-        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d', training=is_training)
-        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e', training=is_training)
-        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f', training=is_training)
+        x = conv_block    (x, [1, 3, 1], [256, 256, 1024], stage=4, block='a', training=is_training)
+        x = identity_block(x, [1, 3, 1], [256, 256, 1024], stage=4, block='b', training=is_training)
+        x = identity_block(x, [1, 3, 1], [256, 256, 1024], stage=4, block='c', training=is_training)
+        x = identity_block(x, [1, 3, 1], [256, 256, 1024], stage=4, block='d', training=is_training)
+        x = identity_block(x, [1, 3, 1], [256, 256, 1024], stage=4, block='e', training=is_training)
+        x = identity_block(x, [1, 3, 1], [256, 256, 1024], stage=4, block='f', training=is_training)
 
-        x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a', training=is_training)
-        x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b', training=is_training)
-        x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c', training=is_training)
+        x = conv_block    (x, [1, 3, 1], [512, 512, 2048], stage=5, block='a', training=is_training)
+        x = identity_block(x, [1, 3, 1], [512, 512, 2048], stage=5, block='b', training=is_training)
+        x = identity_block(x, [1, 3, 1], [512, 512, 2048], stage=5, block='c', training=is_training)
 
-        x = tf.layers.average_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1)
-        x = tf.layers.flatten(inputs)
-        logits = tf.layers.dense(x, num_classes)
+        x = tf.layers.average_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1) #global average pooling
+        x = tf.layers.flatten(x)
+        logits = tf.layers.dense(x, num_classes, activation=None)
 
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits)
         loss = tf.reduce_mean(cross_entropy)
@@ -104,6 +104,7 @@ def _parse_function(example_proto):
     features = {"data": tf.FixedLenFeature((), tf.string, default_value=""),
                 "label": tf.FixedLenFeature((), tf.int64 , default_value=0)}
     parsed_features = tf.parse_single_example(example_proto, features)
+
     data = tf.decode_raw(parsed_features['data'], tf.float32)
     data = tf.reshape(data, [8000, 540])
     data = tf.expand_dims(data, axis=-1)
@@ -116,10 +117,10 @@ def _parse_function(example_proto):
 def model():
     #tf dataset to read tfrecord files
     filenames = tf.placeholder(tf.string, shape=[None])
-    dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=num_classes)
+    dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=5)
     dataset = dataset.map(_parse_function)
     dataset = dataset.repeat(-1)
-    dataset = dataset.shuffle(buffer_size=train_samples)
+    dataset = dataset.shuffle(buffer_size=(5 * batch_size * num_gpus))
     dataset = dataset.batch(batch_size)
     dataset = dataset.prefetch(1 * batch_size * num_gpus)
     iterator = dataset.make_initializable_iterator()
@@ -173,7 +174,7 @@ decay_rate = 0.96
 batch_size = 32
 save_epoch = 2
 epochs = 50
-lr = 1e-4
+lr = 5e-4
 train_samples = 1096
 test_samples = 194
 num_gpus = get_available_gpus()
@@ -237,9 +238,9 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
 
             #save model
             if epoch % save_epoch == 0:
-                saver.save(sess, os.path.join(weight_path, "classifier_loss-{}_acc-{}_epoch-{}".format(batch_loss, batch_acc, epoch)), global_step=g_step)
+                saver.save(sess, os.path.join(weight_path, "resnet50_loss-{}_acc-{}_epoch-{}".format(batch_loss, batch_acc, epoch)), global_step=g_step)
 
         #save model
-        saver.save(sess, os.path.join(weight_path, "classifier_loss-{}_acc-{}_epoch-{}".format(batch_loss, batch_acc, epoch)), global_step=g_step)
+        saver.save(sess, os.path.join(weight_path, "resnet50_loss-{}_acc-{}_epoch-{}".format(batch_loss, batch_acc, epoch)), global_step=g_step)
 
         print("\nFinished!")
