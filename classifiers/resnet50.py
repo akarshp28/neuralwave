@@ -23,65 +23,71 @@ def get_time(time):
 
 def identity_block(input_tensor, kernel_size, filters, stage, block, training):
     with tf.name_scope("stage-{}_block-{}".format(stage, block)):
-        x = tf.layers.conv2d(input_tensor, filters[0], kernel_size, padding="same")
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
+        x = tf.layers.conv2d(input_tensor, filters[0], 1, padding="same")
 
+        x = tf.layers.batch_normalization(x, training=training)
+        x = tf.nn.relu(x)
         x = tf.layers.conv2d(x, filters[1], kernel_size, padding="same")
+
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
-
-        x = tf.layers.conv2d(x, filters[2], kernel_size, padding="same")
-        x = tf.layers.batch_normalization(x, training=training)
+        x = tf.layers.conv2d(x, filters[2], 1, padding="same")
 
         x = tf.add(x, input_tensor)
-        x = tf.nn.relu(x)
     return x
 
 def conv_block(input_tensor, kernel_size, filters, stage, block, training, strides=(2, 2)):
     with tf.name_scope("stage-{}_block-{}".format(stage, block)):
-        x = tf.layers.conv2d(input_tensor, filters[0], kernel_size, strides=strides, padding="same")
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
+        x = tf.layers.conv2d(input_tensor, filters[0], 1, strides=strides, padding="same")
 
+        x = tf.layers.batch_normalization(x, training=training)
+        x = tf.nn.relu(x)
         x = tf.layers.conv2d(x, filters[1], kernel_size, padding="same")
+
         x = tf.layers.batch_normalization(x, training=training)
         x = tf.nn.relu(x)
+        x = tf.layers.conv2d(x, filters[2], 1, padding="same")
 
-        x = tf.layers.conv2d(x, filters[2], kernel_size, padding="same")
-        x = tf.layers.batch_normalization(x, training=training)
-
-        shortcut = tf.layers.conv2d(input_tensor, filters[2], kernel_size, strides=strides, padding="same")
         shortcut = tf.layers.batch_normalization(shortcut, training=training)
+        shortcut = tf.nn.relu(shortcut)
+        shortcut = tf.layers.conv2d(input_tensor, filters[2], 1, strides=strides, padding="same")
 
         x = tf.add(x, shortcut)
-        x = tf.nn.relu(x)
     return x
 
 def classifier(i, inputs, labels, is_training):
-    with tf.name_scope('autoencoder_{}'.format(i)):
-        x = tf.layers.conv2d(inputs, 64, 11, strides=2, padding="same")
-        x = tf.layers.batch_normalization(x, training=is_training)
-        x = tf.nn.relu(x)
-        x = tf.layers.max_pooling2d(x, 3, strides=(2, 2), padding="same")
+    with tf.name_scope('resnet50_{}'.format(i)):
+        with tf.name_scope("stage-1_block-a"):
+            x = tf.layers.batch_normalization(x, training=is_training)
+            x = tf.nn.relu(x)
+            x = tf.layers.conv2d(inputs, 64, 7, strides=2, padding="same")
+            x = tf.layers.max_pooling2d(x, 3, strides=(2, 2), padding="same")
 
-        x = conv_block(x, 7, [64, 64, 256], stage=2, block='a', training=is_training)
-        x = identity_block(x, 7, [64, 64, 256], stage=2, block='b', training=is_training)
-        x = identity_block(x, 7, [64, 64, 256], stage=2, block='c', training=is_training)
+        x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', training=is_training)
+        x = identity_block(x, 3, [64, 64, 256], stage=2, block='b', training=is_training)
+        x = identity_block(x, 3, [64, 64, 256], stage=2, block='c', training=is_training)
 
-        x = conv_block(x, 5, [128, 128, 512], stage=3, block='a', training=is_training)
-        x = identity_block(x, 5, [128, 128, 512], stage=3, block='b', training=is_training)
-        x = identity_block(x, 5, [128, 128, 512], stage=3, block='c', training=is_training)
+        x = conv_block(x, 3, [128, 128, 512], stage=3, block='a', training=is_training)
+        x = identity_block(x, 3, [128, 128, 512], stage=3, block='b', training=is_training)
+        x = identity_block(x, 3, [128, 128, 512], stage=3, block='c', training=is_training)
+        x = identity_block(x, 3, [128, 128, 512], stage=3, block='d', training=is_training)
 
-        x = conv_block(x, 5, [256, 256, 1024], stage=4, block='a', training=is_training)
-        x = identity_block(x, 5, [256, 256, 1024], stage=4, block='b', training=is_training)
-        x = identity_block(x, 5, [256, 256, 1024], stage=4, block='c', training=is_training)
+        x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a', training=is_training)
+        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b', training=is_training)
+        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c', training=is_training)
+        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d', training=is_training)
+        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e', training=is_training)
+        x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f', training=is_training)
 
         x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a', training=is_training)
         x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b', training=is_training)
         x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c', training=is_training)
 
-        x = tf.layers.max_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1)
+        x = tf.layers.average_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1)
         x = tf.layers.flatten(inputs)
         logits = tf.layers.dense(x, num_classes)
 
@@ -159,12 +165,8 @@ def model():
 
 train_path = "/scratch/kjakkala/preprocess_level3/train/"
 test_path = "/scratch/kjakkala/preprocess_level3/test/"
-
-train_filenames = [train_path+file for file in os.listdir(train_path)]
-test_filenames = [test_path+file for file in os.listdir(test_path)]
-
-weight_path = "/scratch/kjakkala/weights/resnet/"
-tensorboard_path = "/scratch/kjakkala/tensorboard/resnet_"
+weight_path = "/scratch/kjakkala/weights/resnet50/"
+tensorboard_path = "/scratch/kjakkala/tensorboard/resnet50_"
 sequence_length = 8000
 input_width = 540
 decay_rate = 0.96
@@ -175,6 +177,8 @@ lr = 1e-4
 train_samples = 1096
 test_samples = 194
 num_gpus = get_available_gpus()
+train_filenames = [train_path+file for file in os.listdir(train_path)]
+test_filenames = [test_path+file for file in os.listdir(test_path)]
 num_classes = len(train_filenames)
 train_steps = int(train_samples//(batch_size*num_gpus))
 test_steps = int(test_samples//(batch_size*num_gpus))
@@ -213,7 +217,6 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
                     sys.stdout.write("\r - {}/{} - {} - loss: {:.4f} - accuracy: {:.4f}".format(step, train_steps, get_time(np.mean(batch_time)*(train_steps-step)), batch_loss, batch_acc))
                 sys.stdout.flush()
 
-
             #Testing
             batch_time = []
             epoch_time = time.time()
@@ -234,9 +237,9 @@ with tf.Graph().as_default(), tf.device('/cpu:0'):
 
             #save model
             if epoch % save_epoch == 0:
-                saver.save(sess, os.path.join(weight_path, "classifier_loss-{}_epoch-{}".format(batch_loss, epoch)), global_step=g_step)
+                saver.save(sess, os.path.join(weight_path, "classifier_loss-{}_acc-{}_epoch-{}".format(batch_loss, batch_acc, epoch)), global_step=g_step)
 
         #save model
-        saver.save(sess, os.path.join(weight_path, "classifier_loss-{}_epoch-{}".format(batch_loss, epoch)), global_step=g_step)
+        saver.save(sess, os.path.join(weight_path, "classifier_loss-{}_acc-{}_epoch-{}".format(batch_loss, batch_acc, epoch)), global_step=g_step)
 
         print("\nFinished!")
