@@ -90,7 +90,7 @@ def classifier(i, inputs, labels, is_training):
         x = tf.layers.average_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1) #global average pooling
         x = tf.layers.flatten(x)
         logits = tf.layers.dense(x, num_classes, activation=None)
-        logits = tf.add(logits, tf.fill(logits.get_shape(), 1e-7)
+        logits = tf.clip_by_value(logits, 1e-7, 1)
 
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits)
         loss = tf.reduce_mean(cross_entropy)
@@ -109,6 +109,7 @@ def _parse_function(example_proto):
     data = tf.decode_raw(parsed_features['data'], tf.float32)
     data = tf.reshape(data, [8000, 540])
     data = tf.expand_dims(data, axis=-1)
+    data = data[3000:5000]
 
     label = tf.cast(parsed_features['label'], tf.int32)
     label = tf.one_hot(label, num_classes)
@@ -118,7 +119,7 @@ def _parse_function(example_proto):
 def model():
     #tf dataset to read tfrecord files
     filenames = tf.placeholder(tf.string, shape=[None])
-    dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=5)
+    dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=num_classes)
     dataset = dataset.map(_parse_function)
     dataset = dataset.repeat(-1)
     dataset = dataset.shuffle(buffer_size=(5 * batch_size * num_gpus))
@@ -169,10 +170,10 @@ train_path = "/scratch/kjakkala/preprocess_level3/train/"
 test_path = "/scratch/kjakkala/preprocess_level3/test/"
 weight_path = "/scratch/kjakkala/weights/resnet50/"
 tensorboard_path = "/scratch/kjakkala/tensorboard/resnet50_"
-sequence_length = 8000
+sequence_length = 2000
 input_width = 540
 decay_rate = 0.96
-batch_size = 32
+batch_size = 1
 save_epoch = 2
 epochs = 50
 lr = 5e-4
