@@ -143,7 +143,7 @@ def get_scaled_csi(csi_st):
     return ret
 
 #call the computational routine in c++
-def read_bfee_c(byts):
+def read_bfee(byts):
     obj = lib.bfee_c()
     lib.read_bfee_c(obj, byts)
 
@@ -166,50 +166,6 @@ def read_bfee_c(byts):
     array["csi"] = np.flip(lib.get_csi(obj), 2)
 
     lib.del_obj(obj)
-
-    return array
-
-# The computational routine in python
-def read_bfee(inBytes):
-    array = {}
-
-    array["timestamp_low"] = c_double(inBytes[0] + (inBytes[1] << 8) +(inBytes[2] << 16) + (inBytes[3] << 24)).value
-    array["bfee_count"] = c_double(inBytes[4] + (inBytes[5] << 8)).value
-    array["Nrx"] = inBytes[8]
-    array["Ntx"] = inBytes[9]
-    array["rssi_a"] = c_double(inBytes[10]).value
-    array["rssi_b"] = c_double(inBytes[11]).value
-    array["rssi_c"] = c_double(inBytes[12]).value
-    array["noise"] = c_byte(inBytes[13]).value
-    array["agc"] = c_double(inBytes[14]).value
-    antenna_sel = inBytes[15]
-    length = inBytes[16] + (inBytes[17] << 8)
-    array["rate"] = c_double(inBytes[18] + (inBytes[19] << 8)).value
-    calc_len = int((30 * (array["Nrx"] * array["Ntx"] * 8 * 2 + 3) + 7) / 8)
-    payload = inBytes[20:]
-    csi = np.empty((array["Ntx"], array["Nrx"], 30), dtype=np.complex)
-    array["perm"] = []
-
-    # Check that length matches what it should
-    if (length != calc_len):
-        raise Exception("Wrong beamforming matrix size.")
-
-    # Compute CSI from all this crap :)
-    index = 0
-    for i in range(30):
-        index += 3
-        remainder = index % 8
-        for j in range(array["Ntx"]):
-                for k in range(array["Nrx"]):
-                    real = c_byte((payload[int(index / 8)]) >> remainder).value | c_byte((payload[int(index / 8 + 1)]) << (8-remainder)).value
-                    complx = c_byte((payload[int(index / 8 + 1)]) >> remainder).value | c_byte((payload[int(index / 8 + 2)]) << (8-remainder)).value
-                    csi[j, k, i] = complex(real, complx)
-                    index += 16;
-
-    array["perm"].append((antenna_sel) & 0x3)
-    array["perm"].append((antenna_sel >> 2) & 0x3)
-    array["perm"].append((antenna_sel >> 4) & 0x3)
-    array["csi"] = csi
 
     return array
 
@@ -250,7 +206,7 @@ def read_bf_file(filename):
 
         if (code == 187): #hex2dec('bb')) Beamforming matrix -- output a record
             count += 1
-            ret.append(read_bfee_c(byts))
+            ret.append(read_bfee(byts))
             perm = ret[count-1]["perm"]
             Nrx = ret[count-1]["Nrx"]
 
