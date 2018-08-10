@@ -7,6 +7,12 @@ import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
+def smooth(x,window_len):
+    s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+    w=np.hanning(window_len)
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    return y[(window_len//2):-(window_len//2)]
+
 def read_samples(dataset_path, endswith=".csv"):
     datapaths, labels = list(), list()
     label = 0
@@ -42,6 +48,7 @@ def convert_to(data_paths, label, dest_path, class_name, min_, max_, scalers):
             data_raw = np.loadtxt(open(data_paths[index], "rb"), delimiter=",").astype(np.float32)
             for i in range(540):
                 data_raw[:, i] = scalers[i].transform(np.expand_dims(data_raw[:, i], axis=0))
+                data_raw[:, i] = smooth(data_raw[:, i], 91)
             data_raw = (data_raw - min_)/(max_ - min_)
 
             example = tf.train.Example(
@@ -68,8 +75,8 @@ def scale_data(data_path):
 
 #******************************************************************************#
 
-src_path = "/users/kjakkala/neuralwave/data/preprocess_level2"
-dest_path = "/users/kjakkala/neuralwave/data/preprocess_level3"
+src_path = "/users/kjakkala/neuralwave/data/preprocess_level1"
+dest_path = "/users/kjakkala/neuralwave/data/preprocess_level2"
 rows = 8000
 cols = 540
 
@@ -92,8 +99,8 @@ if (rank == 0):
 
     train_sl = [X_train[i:i+size] for i in range(0, len(X_train), size)]
     train_array = np.empty((size, rows, cols), dtype=np.float32)
-    
-    if (len(train_sl[-1]) != size):    
+
+    if (len(train_sl[-1]) != size):
         last_sl = train_sl[-1]
         del train_sl[-1]
 
@@ -118,7 +125,7 @@ for index in range(num_sl):
 
 if (rank == 0):
     train_array = np.array([read_array(addr) for addr in last_sl])
-    
+
     for i in range(cols):
         scalers[i].partial_fit(train_array[:, :, i])
 
@@ -132,7 +139,7 @@ if (rank == 0):
         os.makedirs(os.path.join(dest_path, "train"))
     if not os.path.exists(os.path.join(dest_path, "test")):
         os.makedirs(os.path.join(dest_path, "test"))
-    
+
     data_tmp = [[X_train[np.where( y_train == i )], i, os.path.join(dest_path, "train"), classes[i], min_, max_, scalers] for i in range(len(classes))]
     data_tmp.extend([X_test[np.where( y_test == i )], i, os.path.join(dest_path, "test"), classes[i], min_, max_, scalers] for i in range(len(classes)))
     data_c = [data_tmp[i:i+size] for i in range(0, len(data_tmp), size)]
@@ -153,5 +160,3 @@ if (rank == 0):
     if (len(data_c_last) >= 1):
         for tmp in data_c_last:
             convert_to(data_tmp[0], data_tmp[1], data_tmp[2], data_tmp[3], data_tmp[4], data_tmp[5], data_tmp[6])
-
- 
