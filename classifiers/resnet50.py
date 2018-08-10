@@ -90,6 +90,7 @@ def classifier(i, inputs, labels, is_training):
         x = tf.layers.average_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1) #global average pooling
         x = tf.layers.flatten(x)
         logits = tf.layers.dense(x, num_classes, activation=None)
+        logits = tf.add(logits, tf.fill(logits.get_shape(), 1e-7)
 
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits)
         loss = tf.reduce_mean(cross_entropy)
