@@ -98,13 +98,9 @@ if (rank == 0):
     min_ = float('Inf')
     max_ = -float('Inf')
 
-comm.barrier()
-
 for index in range(num_sl):
     addr = comm.scatter(train_sl[index], root=0)
     comm.Gatherv(np.expand_dims(read_array(addr), axis=0), train_array, root=0)
-
-    comm.barrier()
 
     if (rank == 0):
         for i in range(cols):
@@ -115,8 +111,6 @@ for index in range(num_sl):
 
         min_ = min(min_temp, min_)
         max_ = max(max_temp, max_)
-
-    comm.barrier()
 
 if (rank == 0):
     train_array = np.array([read_array(addr) for addr in last_sl])
@@ -145,14 +139,11 @@ if (rank == 0):
 
     data_c_len = len(data_c)
 
-comm.barrier()
-
 data_c_len = comm.bcast(data_c_len, root=0)
 
 for i in range(data_c_len):
     data_tmp = comm.scatter(data_c[i], root=0)
     convert_to(data_tmp[0], data_tmp[1], data_tmp[2], data_tmp[3], data_tmp[4], data_tmp[5], data_tmp[6])
-    comm.barrier()
 
 if (rank == 0):
     if (len(data_c_last) >= 1):
