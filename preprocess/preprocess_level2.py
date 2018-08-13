@@ -1,7 +1,7 @@
 import os
 import sys
 import math
-import h5py
+import pickle
 import numpy as np
 from mpi4py import MPI
 from sklearn.preprocessing import StandardScaler
@@ -57,6 +57,7 @@ def process_sample(data_path, dest_path, min_, max_, scalers):
 
 src_path = "/users/kjakkala/neuralwave/data/preprocess_level1"
 dest_path = "/users/kjakkala/neuralwave/data/preprocess_level2"
+scalers_path = "/users/kjakkala/neuralwave/data/scalers"
 rows = 8000
 cols = 540
 
@@ -125,11 +126,10 @@ if (rank == 0):
         min_ = min(min_temp, min_)
         max_ = max(max_temp, max_)
 
-    hf = h5py.File('/users/kjakkala/neuralwave/data/scalers.h5', 'w')
-    hf.create_dataset('min', data=min_)
-    hf.create_dataset('max', data=max_)
-    hf.create_dataset('scalers', data=scalers)
-    hf.close()
+    dict = {"scalers":scalers, "min":min_, "max":max_}
+    fileObject = open(scalers_path,'wb') 
+    pickle.dump(dict, fileObject)
+    fileObject.close()
 
     if not os.path.exists(os.path.join(dest_path, "train")):
         os.makedirs(os.path.join(dest_path, "train"))
@@ -149,7 +149,7 @@ if (rank == 0):
         data_c_last = data_c[-1]
         del data_c[-1]
 
-    print("Started writing csv files")
+    print("\nStarted writing csv files")
     sys.stdout.flush()
 
 for index in range(data_c_len):
