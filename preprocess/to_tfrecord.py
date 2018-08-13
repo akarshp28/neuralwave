@@ -43,4 +43,3 @@ if __name__ == "__main__":
     args = vars(ap.parse_args())
 
     convert_to(args["src"], args["dst"], args["label"])
-

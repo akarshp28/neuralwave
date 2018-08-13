@@ -1,7 +1,7 @@
-from __future__ import print_function
 import os
 import sys
 import math
+import h5py
 import numpy as np
 from mpi4py import MPI
 from sklearn.preprocessing import StandardScaler
@@ -92,6 +92,9 @@ if (rank == 0):
     min_ = float('Inf')
     max_ = -float('Inf')
 
+    print("Started calculating scalers")
+    sys.stdout.flush()
+
 for index in range(num_sl):
     addr = comm.scatter(train_sl[index], root=0)
     comm.Gatherv(np.expand_dims(read_array(addr), axis=0), train_array, root=0)
@@ -122,6 +125,12 @@ if (rank == 0):
         min_ = min(min_temp, min_)
         max_ = max(max_temp, max_)
 
+    hf = h5py.File('/users/kjakkala/neuralwave/data/scalers.h5', 'w')
+    hf.create_dataset('min', data=min_)
+    hf.create_dataset('max', data=max_)
+    hf.create_dataset('scalers', data=scalers)
+    hf.close()
+
     if not os.path.exists(os.path.join(dest_path, "train")):
         os.mkdir(os.path.join(dest_path, "train"))
         for i in classes:
@@ -140,7 +149,6 @@ if (rank == 0):
         data_c_last = data_c[-1]
         del data_c[-1]
 
-    print("\nFinished calculating scalers")
     print("Started writing csv files")
     sys.stdout.flush()
 
@@ -159,4 +167,3 @@ if (rank == 0):
 
 print("\nFinished !!")
 sys.stdout.flush()
-
