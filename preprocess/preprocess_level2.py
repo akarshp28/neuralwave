@@ -132,14 +132,14 @@ if (rank == 0):
     hf.close()
 
     if not os.path.exists(os.path.join(dest_path, "train")):
-        os.mkdir(os.path.join(dest_path, "train"))
+        os.makedirs(os.path.join(dest_path, "train"))
         for i in classes:
-            os.mkdir(os.path.join(os.path.join(dest_path, "train"), i))
+            os.makedirs(os.path.join(os.path.join(dest_path, "train"), i))
 
     if not os.path.exists(os.path.join(dest_path, "test")):
-        os.mkdir(os.path.join(dest_path, "test"))
+        os.makedirs(os.path.join(dest_path, "test"))
         for i in classes:
-            os.mkdir(os.path.join(os.path.join(dest_path, "test"), i))
+            os.makedirs(os.path.join(os.path.join(dest_path, "test"), i))
 
     data_tmp = [[X_train[i], os.path.join(dest_path, "train"), min_, max_, scalers] for i in range(len(X_train))]
     data_tmp.extend([X_test[i], os.path.join(dest_path, "test"), min_, max_, scalers] for i in range(len(X_test)))
