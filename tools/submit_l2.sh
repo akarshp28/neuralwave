@@ -8,7 +8,7 @@
 #PBS -q copperhead
 
 ### Specify number of CPUs for job
-#PBS -l nodes=1:ppn=32
+#PBS -l procs=32
 
 # ==== load modules ======
 module load openmpi/1.10.0

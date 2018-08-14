@@ -20,8 +20,8 @@
 module load anaconda3/5.0.1
 
 # ==== Main ======
-dst_root="/users/kjakkala/neuralwave/data/preprocess_level3/train/"
-src_root="/users/kjakkala/neuralwave/data/preprocess_level2/train/"
+dst_root="/scratch/kjakkala/neuralwave/data/preprocess_level3/train/"
+src_root="/scratch/kjakkala/neuralwave/data/preprocess_level2/train/"
 
-python3 /users/kjakkala/neuralwave/preprocess/to_tfrecord.py -s "$src_root" -d "$dst_root" -l "$PBS_ARRAYID"
+python3 /scratch/kjakkala/neuralwave/preprocess/to_tfrecord.py -s "$src_root" -d "$dst_root" -l "$PBS_ARRAYID"
 
