@@ -4,7 +4,6 @@ import math
 import pickle
 import numpy as np
 from mpi4py import MPI
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 def smooth(x,window_len):
@@ -33,14 +32,11 @@ def read_samples(dataset_path, endswith=".csv"):
 def read_array(data_path):
     return np.loadtxt(open(data_path, "rb"), delimiter=",", dtype=np.float32)
 
-def process_sample(data_path, dest_path, min_, max_, scalers):
+def process_sample(data_path, dest_path, min_, max_, means):
     data = read_array(data_path)
-
+    data -= means
     for i in range(cols):
-        data[:, i] = scalers[i].transform(np.expand_dims(data[:, i], axis=0))
-    data = (data - min_)/(max_ - min_)
-
-    for i in range(cols):
+        data[:, i] = (data[:, i] - min_[i])/(max_[i] - min_[i])
         data[:, i] = smooth(data[:, i], 91)
 
     if (data.shape != (rows, cols)):
@@ -55,9 +51,9 @@ def process_sample(data_path, dest_path, min_, max_, scalers):
 
 #******************************************************************************#
 
-src_path = "/users/kjakkala/neuralwave/data/preprocess_level1"
-dest_path = "/users/kjakkala/neuralwave/data/preprocess_level2"
-scalers_path = "/users/kjakkala/neuralwave/data/scalers"
+src_path = "/scratch/kjakkala/neuralwave/data/preprocess_level1"
+dest_path = "/scratch/kjakkala/neuralwave/data/preprocess_level2"
+scalers_path = "/scratch/kjakkala/neuralwave/data/scalers"
 rows = 8000
 cols = 540
 
@@ -71,11 +67,11 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.15, random
 num_sl = int(math.floor(len(X_train)/size))
 train_sl = [None for _ in range(num_sl)]
 train_array = None
-
-data_c_last = None
 last_sl = None
+
 data_c_len = int(math.floor(len(X))/size)
 data_c = [None for _ in range(data_c_len)]
+data_c_last = None
 
 if (rank == 0):
     print("train size:", len(X_train), "test size:", len(X_test))
@@ -88,46 +84,58 @@ if (rank == 0):
         last_sl = train_sl[-1]
         del train_sl[-1]
 
-    scalers = [StandardScaler(with_std = False) for _ in range(cols)]
+    means = []
+    mins = []
+    maxs = []
 
-    min_ = float('Inf')
-    max_ = -float('Inf')
-
-    print("Started calculating scalers")
+    print("Started calculating means")
     sys.stdout.flush()
 
+################################################################################
+#mean
 for index in range(num_sl):
     addr = comm.scatter(train_sl[index], root=0)
     comm.Gatherv(np.expand_dims(read_array(addr), axis=0), train_array, root=0)
 
     if (rank == 0):
-        for i in range(cols):
-            scalers[i].partial_fit(train_array[:, :, i])
-
-        min_temp = np.min(train_array)
-        max_temp = np.max(train_array)
-
-        min_ = min(min_temp, min_)
-        max_ = max(max_temp, max_)
-
+        means.extend(np.mean(train_array, axis=1))
         sys.stdout.write("\r{}/{}".format(index+1, num_sl))
         sys.stdout.flush()
 
 if (rank == 0):
     if isinstance(last_sl, (list,)):
         train_array = np.array([read_array(addr) for addr in last_sl])
+        means.extend(np.mean(train_array, axis=1))
+    means = np.mean(means, axis=0)
 
-        for i in range(cols):
-            scalers[i].partial_fit(train_array[:, :, i])
+    print("\nStarted calculating min/max")
+    sys.stdout.flush()
+################################################################################
+#min/max
+for index in range(num_sl):
+    addr = comm.scatter(train_sl[index], root=0)
+    comm.Gatherv(np.expand_dims(read_array(addr), axis=0), train_array, root=0)
 
-        min_temp = np.min(train_array)
-        max_temp = np.max(train_array)
+    if (rank == 0):
+        train_array -= means
+        mins.extend(np.min(train_array, axis=1))
+        maxs.extend(np.max(train_array, axis=1))
+        sys.stdout.write("\r{}/{}".format(index+1, num_sl))
+        sys.stdout.flush()
 
-        min_ = min(min_temp, min_)
-        max_ = max(max_temp, max_)
+if (rank == 0):
+    if isinstance(last_sl, (list,)):
+        train_array = np.array([read_array(addr) for addr in last_sl])
+        train_array -= means
+        mins.extend(np.min(train_array, axis=1))
+        maxs.extend(np.max(train_array, axis=1))
 
-    dict = {"scalers":scalers, "min":min_, "max":max_}
-    fileObject = open(scalers_path,'wb') 
+    mins = np.min(np.min(train_array, axis=0), axis=0)
+    maxs = np.max(np.max(train_array, axis=0), axis=0)
+################################################################################
+
+    dict = {"means":means, "min":mins, "max":maxs}
+    fileObject = open(scalers_path,'wb')
     pickle.dump(dict, fileObject)
     fileObject.close()
 
@@ -141,8 +149,8 @@ if (rank == 0):
         for i in classes:
             os.makedirs(os.path.join(os.path.join(dest_path, "test"), i))
 
-    data_tmp = [[X_train[i], os.path.join(dest_path, "train"), min_, max_, scalers] for i in range(len(X_train))]
-    data_tmp.extend([X_test[i], os.path.join(dest_path, "test"), min_, max_, scalers] for i in range(len(X_test)))
+    data_tmp = [[X_train[i], os.path.join(dest_path, "train"), mins, maxs, means] for i in range(len(X_train))]
+    data_tmp.extend([X_test[i], os.path.join(dest_path, "test"), mins, maxs, means] for i in range(len(X_test)))
     data_c = [data_tmp[i:i+size] for i in range(0, len(data_tmp), size)]
 
     if (len(data_c[-1]) < size):
@@ -167,3 +175,4 @@ if (rank == 0):
 
 print("\nFinished !!")
 sys.stdout.flush()
+
