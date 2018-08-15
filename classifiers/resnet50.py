@@ -90,7 +90,6 @@ def classifier(i, inputs, labels, is_training):
         x = tf.layers.average_pooling2d(x, (x.get_shape()[-3], x.get_shape()[-2]), 1) #global average pooling
         x = tf.layers.flatten(x)
         logits = tf.layers.dense(x, num_classes, activation=None)
-        logits = tf.clip_by_value(logits, 1e-7, 1)
 
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits_v2(labels=labels, logits=logits)
         loss = tf.reduce_mean(cross_entropy)
@@ -109,7 +108,7 @@ def _parse_function(example_proto):
     data = tf.decode_raw(parsed_features['data'], tf.float32)
     data = tf.reshape(data, [8000, 540])
     data = tf.expand_dims(data, axis=-1)
-    data = data[3000:5000]
+    data = data[2000:6000]
 
     label = tf.cast(parsed_features['label'], tf.int32)
     label = tf.one_hot(label, num_classes)
@@ -166,19 +165,19 @@ def model():
 
     return init, merged, saver, global_step, avg_loss, avg_acc, apply_gradient_op, labels, iterator, filenames, is_training
 
-train_path = "/scratch/kjakkala/preprocess_level3/train/"
-test_path = "/scratch/kjakkala/preprocess_level3/test/"
-weight_path = "/scratch/kjakkala/weights/resnet50/"
-tensorboard_path = "/scratch/kjakkala/tensorboard/resnet50_"
-sequence_length = 2000
+train_path = "/scratch/kjakkala/neuralwave/data/preprocess_level3/train/"
+test_path = "/scratch/kjakkala/neuralwave/data/preprocess_level3/test/"
+weight_path = "/scratch/kjakkala/neuralwave/weights/resnet50/"
+tensorboard_path = "/scratch/kjakkala/neuralwave/tensorboard/resnet50_"
+sequence_length = 4000
 input_width = 540
 decay_rate = 0.96
 batch_size = 1
 save_epoch = 2
 epochs = 50
 lr = 5e-4
-train_samples = 1096
-test_samples = 194
+train_samples = 1107
+test_samples = 196
 num_gpus = get_available_gpus()
 train_filenames = [train_path+file for file in os.listdir(train_path)]
 test_filenames = [test_path+file for file in os.listdir(test_path)]
