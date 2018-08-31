@@ -25,7 +25,7 @@ def read_samples(dataset_path, endswith=".csv"):
 
 def main():
     src_path = "/scratch/kjakkala/neuralwave/data/preprocess_level2"
-    dest_path = "/scratch/kjakkala/neuralwave/data/preprocess_level2_pca"
+    dest_file = "/scratch/kjakkala/neuralwave/data/pca_data_new.h5"
 
     train_x = []
     train_y = []
@@ -46,7 +46,7 @@ def main():
         test_y.append(y[i])
     test_x = pca.transform(np.reshape(test_x, (len(X), -1)))
 
-    hf = h5py.File('/scratch/kjakkala/neuralwave/data/pca_data.h5', 'w')
+    hf = h5py.File(dest_file, 'w')
     hf.create_dataset('X_train', data=train_x)
     hf.create_dataset('y_train', data=train_y)
     hf.create_dataset('X_test', data=test_x)

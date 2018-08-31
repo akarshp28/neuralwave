@@ -34,10 +34,11 @@ def read_array(data_path):
 
 def process_sample(data_path, dest_path, min_, max_, means):
     data = read_array(data_path)
+    for i in range(cols):
+        data[:, i] = smooth(data[:, i], filter)
     data -= means
     for i in range(cols):
         data[:, i] = (data[:, i] - min_[i])/(max_[i] - min_[i])
-        data[:, i] = smooth(data[:, i], 91)
 
     if (data.shape != (rows, cols)):
         print(data.shape, data_path)
@@ -53,9 +54,10 @@ def process_sample(data_path, dest_path, min_, max_, means):
 
 src_path = "/scratch/kjakkala/neuralwave/data/preprocess_level1"
 dest_path = "/scratch/kjakkala/neuralwave/data/preprocess_level2"
-scalers_path = "/scratch/kjakkala/neuralwave/data/scalers"
+scalers_path = "/scratch/kjakkala/neuralwave/data/scalers.pkl"
 rows = 8000
 cols = 540
+filter = 91
 
 comm = MPI.COMM_WORLD
 size = comm.Get_size()
@@ -98,6 +100,9 @@ for index in range(num_sl):
     comm.Gatherv(np.expand_dims(read_array(addr), axis=0), train_array, root=0)
 
     if (rank == 0):
+        for i in range(size):
+            for j in range(cols):
+                train_array[i, :, j] = smooth(train_array[i, :, j], filter)
         means.extend(np.mean(train_array, axis=1))
         sys.stdout.write("\r{}/{}".format(index+1, num_sl))
         sys.stdout.flush()
@@ -105,6 +110,9 @@ for index in range(num_sl):
 if (rank == 0):
     if isinstance(last_sl, (list,)):
         train_array = np.array([read_array(addr) for addr in last_sl])
+        for i in range(train_array.shape[0]):
+            for j in range(cols):
+                train_array[i, :, j] = smooth(train_array[i, :, j], filter)
         means.extend(np.mean(train_array, axis=1))
     means = np.mean(means, axis=0)
 
@@ -117,6 +125,9 @@ for index in range(num_sl):
     comm.Gatherv(np.expand_dims(read_array(addr), axis=0), train_array, root=0)
 
     if (rank == 0):
+        for i in range(size):
+            for j in range(cols):
+                train_array[i, :, j] = smooth(train_array[i, :, j], filter)
         train_array -= means
         mins.extend(np.min(train_array, axis=1))
         maxs.extend(np.max(train_array, axis=1))
@@ -126,6 +137,9 @@ for index in range(num_sl):
 if (rank == 0):
     if isinstance(last_sl, (list,)):
         train_array = np.array([read_array(addr) for addr in last_sl])
+        for i in range(train_array.shape[0]):
+            for j in range(cols):
+                train_array[i, :, j] = smooth(train_array[i, :, j], filter)
         train_array -= means
         mins.extend(np.min(train_array, axis=1))
         maxs.extend(np.max(train_array, axis=1))
