@@ -10,6 +10,7 @@ import numpy as np
 import pickle
 import h5py
 import math
+import sys
 
 def identity_block_original_3l(input_tensor, kernel_size, filters, stage, block):
     filters1, filters2, filters3 = filters
@@ -196,12 +197,12 @@ y_test = np.eye(30)[hf.get('y_test')]
 hf.close()
 
 lr=1e-3
-epochs=600
+epochs=100
 
 inputs = layers.Input(shape=(X_train.shape[-2], 1), name='input')
 
-x = conv_block_original_3l(inputs, 3, [8, 8, 16], stage=1, block='a', strides=2)
-x = identity_block_original_3l(x, 3, [8, 8, 16], stage=1, block='b')
+x = conv_block_original_3l(inputs, 5, [8, 8, 16], stage=1, block='a', strides=2)
+x = identity_block_original_3l(x, 5, [8, 8, 16], stage=1, block='b')
 
 x = layers.Flatten()(x)
 x = layers.Dense(30, activation='softmax')(x)
@@ -211,9 +212,13 @@ model.summary()
 model.compile(loss='categorical_crossentropy', optimizer=optimizers.Adam(lr=lr), metrics=['acc'])
 
 history = []
-for i in range(1000):
-    history.append(model.fit(x=X_train, y=y_train, epochs=epochs, validation_data=(X_test, y_test), verbose=2))
+for i in range(1):
+    history.append(model.fit(x=X_train, y=y_train, epochs=epochs, validation_data=(X_test, y_test), verbose=2).history)
+    print(i+1, history[-1]["val_acc"][-1])
+    sys.stdout.flush()
 
-fileObject = open("/users/kjakkala/resnet25_softmax.pkl", 'wb')
-pickle.dump(history, fileObject)
-fileObject.close()
+#fileObject = open("/users/kjakkala/neuralwave/data/resnet25_softmax_100ep_{}_5kernal_2res.pkl".format(lr), 'wb')
+#pickle.dump(history, fileObject)
+#fileObject.close()
+
+model.save("/users/kjakkala/neuralwave/weights/resnet_2block_1e-3_5kernal.h5")
