@@ -275,11 +275,11 @@ train_dset = pca.fit_transform(train_dset.reshape((train_dset.shape[0], -1)))
 test_dset = pca.transform(test_dset.reshape((test_dset.shape[0], -1)))
 
 dict = {'pca': pca, 'means': means, 'mins': mins, 'maxs': maxs}
-fileObject = open(os.path.join(dest_path, dest_file+'.pkl'),'wb')
+fileObject = open(os.path.join(dest_path, dest_file+'_scalers'+'.pkl'),'wb')
 pickle.dump(dict, fileObject)
 fileObject.close() 
 
-hf = h5py.File(os.path.join(dest_path, dest_file+'.h5'), 'w')
+hf = h5py.File(os.path.join(dest_path, dest_file+'_data'+'.h5'), 'w')
 hf.create_dataset('X_train', data=train_dset)
 hf.create_dataset('y_train', data=train_labels)
 hf.create_dataset('X_test', data=test_dset)
