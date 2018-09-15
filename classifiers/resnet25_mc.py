@@ -190,36 +190,38 @@ class AMSoftmax(Layer):
         return (input_shape[0][0], self.output_dim)
 #******************************************************************************#
 
+data_set_path = '/scratch/kjakkala/neuralwave/data/preprocess_level3_mc/pca_data'
+data_sets = os.listdir(data_set_path)
 history = []
 lr=1e-3
 epochs=100
 
-hf = h5py.File("/users/kjakkala/neuralwave/data/pca_data.h5", 'r')
-X_train = np.expand_dims(hf.get('X_train'), axis=-1)
-X_test = np.expand_dims(hf.get('X_test'), axis=-1)
-y_train = np.eye(30)[hf.get('y_train')]
-y_test = np.eye(30)[hf.get('y_test')]
-hf.close()
+for data_filepath in data_sets:
+	hf = h5py.File(os.path.join(data_set_path, data_filepath), 'r')
+	X_train = np.expand_dims(hf.get('X_train'), axis=-1)
+	X_test = np.expand_dims(hf.get('X_test'), axis=-1)
+	y_train = np.eye(30)[hf.get('y_train')]
+	y_test = np.eye(30)[hf.get('y_test')]
+	hf.close()
 
-inputs = layers.Input(shape=(X_train.shape[-2], 1), name='input')
+	inputs = layers.Input(shape=(X_train.shape[-2], 1), name='input')
 
-x = conv_block_original_3l(inputs, 3, [8, 8, 16], stage=1, block='a', strides=2)
-x = identity_block_original_3l(x, 3, [8, 8, 16], stage=1, block='b')
+	x = conv_block_original_3l(inputs, 5, [8, 8, 16], stage=1, block='a', strides=2)
+	x = identity_block_original_3l(x, 5, [8, 8, 16], stage=1, block='b')
 
-x = layers.Flatten()(x)
-x = layers.Dense(30, activation='softmax')(x)
+	x = layers.Flatten()(x)
+	x = layers.Dense(30, activation='softmax')(x)
 
-model = Model(inputs=inputs, outputs=x)
-model.summary()
+	model = Model(inputs=inputs, outputs=x)
 
-for i in range(1):
-    model.compile(loss='categorical_crossentropy', optimizer=optimizers.Adam(lr=lr), metrics=['acc'])
-    history.append(model.fit(x=X_train, y=y_train, epochs=epochs, validation_data=(X_test, y_test), verbose=2).history)
-    #print(i+1, history[-1]["val_acc"][-1])
-    sys.stdout.flush()
+	for i in range(1):
+	    model.compile(loss='categorical_crossentropy', optimizer=optimizers.Adam(lr=lr), metrics=['acc'])
+	    history.append(model.fit(x=X_train, y=y_train, epochs=epochs, validation_data=(X_test, y_test), verbose=0).history)
+	    print(i+1, history[-1]["val_acc"][-1])
+	    sys.stdout.flush()
 
-#fileObject = open("/users/kjakkala/neuralwave/data/resnet25_softmax_100ep_{}_5kernal_2res_ph_275.pkl".format(lr), 'wb')
-#pickle.dump(history, fileObject)
-#fileObject.close()
+fileObject = open("/users/kjakkala/neuralwave/data/resnet25_softmax_100ep_{}_5kernal_2res_mc_adam.pkl".format(lr), 'wb')
+pickle.dump(history, fileObject)
+fileObject.close()
 
 #model.save("/users/kjakkala/neuralwave/weights/resnet_2block_1e-3_5kernal.h5")

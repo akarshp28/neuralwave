@@ -8,20 +8,10 @@
 #PBS -q copperhead
 
 ### Specify number of CPUs for job
-#PBS -l nodes=1:ppn=1,mem=1GB
-
-# mail alert at start, end and abortion of execution
-#PBS -m bea
-
-# send mail to this address
-#PBS -M kjakkala@uncc.edu
+#PBS -l nodes=1:ppn=1:gpus=1,mem=1GB
 
 # ==== load modules ======
-module load anaconda3/5.0.1
+module load tensorflow/1.7.0-anaconda3-cuda9
 
 # ==== Main ======
-dst_root="/scratch/kjakkala/neuralwave/data/preprocess_level3/train/"
-src_root="/scratch/kjakkala/neuralwave/data/preprocess_level2/train/"
-
-python3 /scratch/kjakkala/neuralwave/preprocess/to_tfrecord.py -s "$src_root" -d "$dst_root" -l "$PBS_ARRAYID"
-
+python3 /users/kjakkala/neuralwave/classifiers/resnet25.py

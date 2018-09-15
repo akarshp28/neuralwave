@@ -8,11 +8,10 @@
 #PBS -q copperhead
 
 ### Specify number of CPUs for job
-#PBS -l procs=32
+#PBS -l nodes=1:ppn=1,mem=128GB
 
 # ==== load modules ======
-module load openmpi/1.10.0
 module load anaconda3/5.0.1
 
 # ==== Main ======
-mpirun -n 32 python /users/kjakkala/neuralwave/preprocess/preprocess_level2.py
+python /users/kjakkala/neuralwave/preprocess/pca.py -s $1 -d $2 -f $3

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 
-from mpi4py import MPI
+from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from scipy.io import loadmat
 import numpy as np
+import argparse
+import pickle
 import time
+import h5py
+import math
 import sys
 import os
-import math
-from scipy.io import loadmat
 
 def get_csi(x):
     x = np.squeeze(x["csi_trace"])
@@ -62,10 +66,11 @@ def apply_phcorrect(ph_raw):
 def fill_gaps(csi_trace, technique):
     amp_data = []
     ph_data = []
+
     for ind in range(len(csi_trace)):
         csi_entry = csi_trace[ind]
-        scaled_csi = get_scaled_csi(csi_entry)
 
+        scaled_csi = get_scaled_csi(csi_entry)
         amp = np.absolute(scaled_csi)
         ph = np.angle(scaled_csi)
 
@@ -122,7 +127,7 @@ def fill_gaps(csi_trace, technique):
                 amp_data.append(np.array(amp).T.flatten())
                 ph_data.append(apply_phcorrect(ph).T.flatten())
 
-    return np.array(amp_data), np.array(ph_data)
+    return np.hstack([amp_data, ph_data])
 
 def dbinv(x):
     return np.power(10, (np.array(x)/10))
@@ -190,52 +195,90 @@ def compute_data(file_path):
         raise ValueError("File dosn't exits")
 
     csi_trace = get_csi(loadmat(file_path))[2000:10000]
-    X_amp, X_ph = fill_gaps(csi_trace, technique='mean')
+    csi_trace = fill_gaps(csi_trace, technique='mean')
 
-    if ((X_amp.shape != (8000, 270)) or (X_ph.shape != (8000, 270))):
-        print(X_amp.shape, X_ph.shape, file_path)
-        return
+    return csi_trace.astype(np.float32)
 
-    path, file = os.path.split(file_path)
-    _, class_name = os.path.split(path)
-
-    file = os.path.splitext(file)[0]
-
-    file_name = os.path.join(os.path.join(dest_path, class_name), (file+".csv"))
-    np.savetxt(file_name, np.hstack([X_amp, X_ph]), delimiter=',')
+def smooth(x,window_len):
+    s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
+    w=np.hanning(window_len)
+    y=np.convolve(w/w.sum(),s,mode='valid')
+    return y[(window_len//2):-(window_len//2)]
 
 #******************************************************************************#
 
-src_path = "/users/kjakkala/neuralwave/data/preprocess_level1_new"
-dest_path = "/users/kjakkala/neuralwave/data/preprocess_level2_new"
+ap = argparse.ArgumentParser()
+ap.add_argument("-s", "--src", required=True, help="source dir")
+ap.add_argument("-d", "--dst", required=True, help="destination dir")
+ap.add_argument("-f", "--file", required=True, help="filepath/filename for scalers")
+args = vars(ap.parse_args())
 
-comm = MPI.COMM_WORLD
-size = comm.Get_size() # new: gives number of ranks in comm
-rank = comm.Get_rank()
+src_path = args["src"]
+dest_path = args["dst"]
+scalers_path = args["file"]
 
-files = None
-if (rank == 0):
-    last_x = []
-    x, _ = read_samples(src_path, ".mat")
-    print(len(x))
+filter_size = 91
+rows = 8000
+cols = 540
 
-    classes = os.walk(src_path).__next__()[1]
-    for class_name in classes:
-        if not os.path.exists(os.path.join(dest_path, class_name)):
-            os.makedirs(os.path.join(dest_path, class_name))
+files, labels = read_samples(src_path, ".mat")
+train_files, test_files, train_y, test_y = train_test_split(files, labels, test_size=0.15)
 
-    num_per_node = math.ceil(len(x)/size)
-    files = []
-    for i in range(size):
-        files.append(x[:num_per_node])
-        del x[:num_per_node]
+train_dset = []
+test_dset = []
+train_labels = []
+test_labels = []
 
-    print(len(x))
+tmp_files = []
+for i in range(len(train_files)):
+    tmp = compute_data(train_files[i])
+    if (tmp.shape == (rows, cols)):
+        for j in range(cols):
+            tmp[:, j] = smooth(tmp[:, j], filter_size)
+        train_dset.append(tmp)
+        tmp_files.append(train_files[i])
+        train_labels.append(train_y[i])
+    else:
+        print("File dimension error | File:{} | Size:{}", train_files[i], tmp.shape)
+train_files = tmp_files
 
-files = comm.scatter(files, root=0)
+tmp_files = []
+for i in range(len(test_files)):
+    tmp = compute_data(test_files[i])
+    if (tmp.shape == (rows, cols)):
+        for j in range(cols):
+            tmp[:, j] = smooth(tmp[:, j], filter_size)
+        test_dset.append(tmp)
+        tmp_files.append(test_files[i])
+        test_labels.append(test_y[i])
+    else:
+        print("File dimension error | File:{} | Size:{}", test_files[i], tmp.shape)
+test_files = tmp_files
 
-for i in range(len(files)):
-    compute_data(files[i])
+train_dset = np.array(train_dset)
+test_dset = np.array(test_dset)
 
-if (rank == 0):
-    print("finished!!")
+means = np.mean(np.mean(train_dset, axis=0), axis=0)
+mins = np.min(np.min(train_dset, axis=0), axis=0)
+maxs = np.max(np.max(train_dset, axis=0), axis=0)
+
+train_dset -= means
+train_dset -= mins
+train_dset /= (maxs-mins)
+
+test_dset -= means
+test_dset -= mins
+test_dset /= (maxs-mins)
+
+pca = PCA(n_components=0.95)
+train_dset = pca.fit_transform(train_dset.reshape((train_dset.shape[0], -1)))
+test_dset = pca.transform(test_dset.reshape((test_dset.shape[0], -1)))
+
+hf = h5py.File(os.path.join(dest_path, scalers_path), 'w')
+hf.create_dataset('X_train', data=train_dset)
+hf.create_dataset('y_train', data=train_labels)
+hf.create_dataset('X_test', data=test_dset)
+hf.create_dataset('y_test', data=test_labels)
+hf.close()
+
+print("finished!!")
