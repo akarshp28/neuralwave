@@ -215,7 +215,7 @@ args = vars(ap.parse_args())
 
 src_path = args["src"]
 dest_path = args["dst"]
-scalers_path = args["file"]
+dest_file = args["file"]
 
 filter_size = 91
 rows = 8000
@@ -274,7 +274,12 @@ pca = PCA(n_components=0.95)
 train_dset = pca.fit_transform(train_dset.reshape((train_dset.shape[0], -1)))
 test_dset = pca.transform(test_dset.reshape((test_dset.shape[0], -1)))
 
-hf = h5py.File(os.path.join(dest_path, scalers_path), 'w')
+dict = {'pca': pca, 'means': means, 'mins': mins, 'maxs': maxs}
+fileObject = open(os.path.join(dest_path, dest_file+'.pkl'),'wb')
+pickle.dump(dict, fileObject)
+fileObject.close() 
+
+hf = h5py.File(os.path.join(dest_path, dest_file+'.h5'), 'w')
 hf.create_dataset('X_train', data=train_dset)
 hf.create_dataset('y_train', data=train_labels)
 hf.create_dataset('X_test', data=test_dset)
