@@ -190,66 +190,82 @@ def read_samples(dataset_path, endswith=".csv"):
 
     return datapaths, labels
 
-def compute_data(file_path):
-    if (not os.path.isfile(file_path)):
-        raise ValueError("File dosn't exits")
-
-    csi_trace = get_csi(loadmat(file_path))[2000:10000]
-    csi_trace = fill_gaps(csi_trace, technique='mean')
-
-    return csi_trace.astype(np.float32)
-
 def smooth(x,window_len):
     s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
     w=np.hanning(window_len)
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y[(window_len//2):-(window_len//2)]
 
+def compute_data(file_path, sampling, cols):
+    if (not os.path.isfile(file_path)):
+        raise ValueError("File dosn't exits")
+
+    csi_trace = get_csi(loadmat(file_path))[2000:10000]
+    csi_trace = csi_trace[::sampling]
+    csi_trace = fill_gaps(csi_trace, technique='mean')[:, :cols]
+
+    return csi_trace.astype(np.float32)
+
 #******************************************************************************#
+
+#sampling 1: 8000
+#sampling 2: 4000
+#sampling 4: 2000
+#sampling 8: 1000
+#sampling 16: 500
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True, help="source dir")
-ap.add_argument("--scalars", required=True, help="filepath/filename for scalers")
-ap.add_argument("--data", required=True, help="filepath/filename for dataset")
+ap.add_argument("--file", required=True, help="h5 file for dataset")
+ap.add_argument("--scalers", required=True, help="pkl file with scalers")
+ap.add_argument("--sampling", required=True, type=int, help="sampling rate for data")
+ap.add_argument("--cols", required=True, type=int, help="number of columns to keep (1-540)")
 args = vars(ap.parse_args())
 
 src_path = args["src"]
-scalers_path = args["scalars"]
-dataset_path = args["data"]
+dest_file = args["file"]
+scalers_file = args["scalers"]
+sampling = args["sampling"]
+cols = args["cols"]
 
 filter_size = 91
-rows = 8000
-cols = 540
+rows = int(8000/sampling)
 
-files, _ = read_samples(src_path, ".mat")
+print("rows: ", rows, "cols: ", cols)
+sys.stdout.flush()
 
-dset = []
-tmp_files = []
+files, labels = read_samples(src_path, ".mat")
+
+dset_X = []
+dset_y = []
 for i in range(len(files)):
-    tmp = compute_data(files[i])
+    tmp = compute_data(files[i], sampling, cols)
     if (tmp.shape == (rows, cols)):
         for j in range(cols):
             tmp[:, j] = smooth(tmp[:, j], filter_size)
-        dset.append(tmp)
-        tmp_files.append(files[i])
+        dset_X.append(tmp)
+        dset_y.append(labels[i])
     else:
         print("File dimension error | File:{} | Size:{}", files[i], tmp.shape)
-files = tmp_files
 
-dset = np.array(dset)
+dset_X = np.array(dset_X)
+dset_y = np.array(dset_y)
 
-fileObject = open(scalers_path,'rb')
+print("Data shape: ", dset_y.shape, dset_X.shape)
+sys.stdout.flush()
+
+fileObject = open(scalers_file,'rb')
 dict = pickle.load(fileObject)
-fileObject.close() 
+fileObject.close()
 
-dset -= dict['means']
-dset -= dict['mins']
-dset /= (dict['maxs'] - dict['mins'])
-dset = dict['pca'].fit_transform(dset.reshape((dset.shape[0], -1)))
+dset_X -= dict['means']
+dset_X -= dict['mins']
+dset_X /= (dict['maxs'] - dict['mins'])
+dset_X = dict['pca'].transform(dset_X.reshape((dset_X.shape[0], -1)))
 
-hf = h5py.File(dataset_path, 'w')
-hf.create_dataset('X', data=dset)
-hf.create_dataset('y', data=files)
+hf = h5py.File(dest_file, 'w')
+hf.create_dataset('X_train', data=dset_X)
+hf.create_dataset('y_train', data=dset_y)
 hf.close()
 
 print("finished!!")

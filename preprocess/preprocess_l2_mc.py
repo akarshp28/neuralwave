@@ -256,34 +256,33 @@ dset_y = np.array(dset_y)
 print("Data shape: ", dset_y.shape, dset_X.shape)
 sys.stdout.flush()
 
-train_X, test_X, train_y, test_y = train_test_split(dset_X, dset_y, test_size=0.15, random_state=42)
+for iteration in range(50):
+	print("Processing iteration: ", iteration)
+	sys.stdout.flush()
 
-means = np.mean(np.mean(train_X, axis=0), axis=0)
-train_X -= means
+	train_X, test_X, train_y, test_y = train_test_split(dset_X, dset_y, test_size=0.15)
 
-mins = np.min(np.min(train_X, axis=0), axis=0)
-maxs = np.max(np.max(train_X, axis=0), axis=0)
-train_X -= mins
-train_X /= (maxs-mins)
+	means = np.mean(np.mean(train_X, axis=0), axis=0)
+	train_X -= means
 
-test_X -= means
-test_X -= mins
-test_X /= (maxs-mins)
+	mins = np.min(np.min(train_X, axis=0), axis=0)
+	maxs = np.max(np.max(train_X, axis=0), axis=0)
+	train_X -= mins
+	train_X /= (maxs-mins)
 
-pca = PCA(n_components=pca_var)
-train_X = pca.fit_transform(train_X.reshape((train_X.shape[0], -1)))
-test_X = pca.transform(test_X.reshape((test_X.shape[0], -1)))
+	test_X -= means
+	test_X -= mins
+	test_X /= (maxs-mins)
 
-hf = h5py.File(os.path.join(dest_path, dest_file+'.h5'), 'w')
-hf.create_dataset('X_train', data=train_X)
-hf.create_dataset('y_train', data=train_y)
-hf.create_dataset('X_test', data=test_X)
-hf.create_dataset('y_test', data=test_y)
-hf.close()
+	pca = PCA(n_components=pca_var)
+	train_X = pca.fit_transform(train_X.reshape((train_X.shape[0], -1)))
+	test_X = pca.transform(test_X.reshape((test_X.shape[0], -1)))
 
-dict = {'pca': pca, 'means': means, 'mins': mins, 'maxs': maxs}
-fileObject = open(os.path.join(dest_path, dest_file+'_scalers'+'.pkl'),'wb')
-pickle.dump(dict, fileObject)
-fileObject.close()
+	hf = h5py.File(os.path.join(dest_path, dest_file+'_'+str(iteration)+'.h5'), 'w')
+	hf.create_dataset('X_train', data=train_X)
+	hf.create_dataset('y_train', data=train_y)
+	hf.create_dataset('X_test', data=test_X)
+	hf.create_dataset('y_test', data=test_y)
+	hf.close()
 
 print("finished!!")

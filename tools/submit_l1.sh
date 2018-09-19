@@ -11,7 +11,7 @@
 #PBS -l nodes=1:ppn=16,mem=32GB
 
 # ==== Main ======
-INPUTFILE="/users/kjakkala/neuralwave/preprocess/preprocess_level1/preprocess_level1.m"
+INPUTFILE="/users/kjakkala/neuralwave/preprocess/preprocess_l1/preprocess_level1.m"
 
 # ===== END APP OPTIONS =====
 

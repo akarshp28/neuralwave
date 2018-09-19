@@ -7,6 +7,7 @@ from keras.models import Model
 from keras import optimizers
 from keras import layers
 import numpy as np
+import argparse
 import pickle
 import h5py
 import math
@@ -190,7 +191,11 @@ class AMSoftmax(Layer):
         return (input_shape[0][0], self.output_dim)
 #******************************************************************************#
 
-data_set_path = '/scratch/kjakkala/neuralwave/data/preprocess_level3_mc/pca_data'
+ap = argparse.ArgumentParser()
+ap.add_argument("-s", "--src", required=True, help="source dir")
+args = vars(ap.parse_args())
+data_set_path = args["src"]
+
 data_sets = os.listdir(data_set_path)
 history = []
 lr=1e-3
@@ -220,8 +225,6 @@ for data_filepath in data_sets:
 	    print(i+1, history[-1]["val_acc"][-1])
 	    sys.stdout.flush()
 
-fileObject = open("/users/kjakkala/neuralwave/data/resnet25_softmax_100ep_{}_5kernal_2res_mc_adam.pkl".format(lr), 'wb')
+fileObject = open("/users/kjakkala/neuralwave/data/"+data_set_path.split('/')[-1]+".pkl", 'wb')
 pickle.dump(history, fileObject)
 fileObject.close()
-
-#model.save("/users/kjakkala/neuralwave/weights/resnet_2block_1e-3_5kernal.h5")

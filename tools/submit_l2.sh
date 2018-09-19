@@ -10,8 +10,11 @@
 ### Specify number of CPUs for job
 #PBS -l nodes=1:ppn=1,mem=128GB
 
+#PBS -m bea
+#PBS -M kjakkala@uncc.edu
+
 # ==== load modules ======
 module load anaconda3/5.0.1
 
 # ==== Main ======
-python /users/kjakkala/neuralwave/preprocess/pca.py -s $1 -d $2 -f $3
+python /users/kjakkala/neuralwave/preprocess/preprocess_l2.py --src $1 --dst $2 --file $3 --sampling $4 --cols $5 --pca $6
