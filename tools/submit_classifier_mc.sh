@@ -2,7 +2,7 @@
 
 # ===== PBS OPTIONS =====
 ### Set the job name
-#PBS -N classifier_power_s
+#PBS -N classifier
 
 ### Specify queue to run in
 #PBS -q copperhead

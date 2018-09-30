@@ -196,13 +196,13 @@ def smooth(x,window_len):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y[(window_len//2):-(window_len//2)]
 
-def compute_data(file_path, sampling, cols):
+def compute_data(file_path, sampling, cols1, cols2):
     if (not os.path.isfile(file_path)):
         raise ValueError("File dosn't exits")
 
     csi_trace = get_csi(loadmat(file_path))[2000:10000]
     csi_trace = csi_trace[::sampling]
-    csi_trace = fill_gaps(csi_trace, technique='mean')[:, :cols]
+    csi_trace = fill_gaps(csi_trace, technique='mean')[:, cols1:cols2]
 
     return csi_trace.astype(np.float32)
 
@@ -219,7 +219,7 @@ ap.add_argument("--src", required=True, help="source dir")
 ap.add_argument("--dst", required=True, help="destination dir")
 ap.add_argument("--file", required=True, help="filename without extension for scalers and dataset")
 ap.add_argument("--sampling", required=True, type=int, help="sampling rate for data")
-ap.add_argument("--cols", required=True, type=int, help="number of columns to keep (1-540)")
+ap.add_argument("--cols", required=True, help="Data that needs to be computed AMP/PH/ALL")
 ap.add_argument("--pca", required=True, type=float, help="percent of variance that needs to be explained by PCA (0-1)")
 args = vars(ap.parse_args())
 
@@ -227,21 +227,37 @@ src_path = args["src"]
 dest_path = args["dst"]
 dest_file = args["file"]
 sampling = args["sampling"]
-cols = args["cols"]
+cols = args["cols"].strip()
 pca_var = args["pca"]
+
+if cols == "AMP":
+        cols1 = 0
+        cols2 = 270
+        cols = 270
+elif cols == "PH":
+        cols1 = 270
+        cols2 = 540
+        cols = 270
+elif cols == "ALL":
+        cols1 = 0
+        cols2 = 540
+        cols = 540
+else:
+        raise ValueError("Check cols argument!! Got: {} | Acceptable arguments (AMP/PH/ALL)".format(cols))
 
 filter_size = 91
 rows = int(8000/sampling)
 
-print("rows: ", rows, "cols: ", cols, "PCA Var: ", pca_var)
+print("rows: ", rows, "cols: ", cols1, "-", cols2, "PCA Var: ", pca_var)
 sys.stdout.flush()
 
 files, labels = read_samples(src_path, ".mat")
 
 dset_X = []
 dset_y = []
+
 for i in range(len(files)):
-    tmp = compute_data(files[i], sampling, cols)
+    tmp = compute_data(files[i], sampling, cols1, cols2)
     if (tmp.shape == (rows, cols)):
         for j in range(cols):
             tmp[:, j] = smooth(tmp[:, j], filter_size)
@@ -287,3 +303,4 @@ pickle.dump(dict, fileObject)
 fileObject.close()
 
 print("finished!!")
+

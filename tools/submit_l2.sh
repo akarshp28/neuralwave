@@ -1,15 +1,11 @@
 #! /bin/bash
 
 # ===== PBS OPTIONS =====
-### Set the job name
+
 #PBS -N data_prep
-
-### Specify queue to run in
 #PBS -q copperhead
-
-### Specify number of CPUs for job
+#PBS -l walltime=10:00:00
 #PBS -l nodes=1:ppn=1,mem=128GB
-
 #PBS -m bea
 #PBS -M kjakkala@uncc.edu
 

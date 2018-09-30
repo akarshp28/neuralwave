@@ -1,5 +1,6 @@
 from tensorflow import keras
 from keras.initializers import TruncatedNormal
+from keras.callbacks import ModelCheckpoint
 from keras.engine.topology import Layer
 from keras.layers import Lambda
 from keras import backend as K
@@ -193,8 +194,11 @@ class AMSoftmax(Layer):
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-s", "--src", required=True, help="source dir")
+ap.add_argument("-d", "--dst", required=True, help="destination history file")
+
 args = vars(ap.parse_args())
 data_set_path = args["src"]
+dest_file = args["dst"]
 
 data_sets = os.listdir(data_set_path)
 history = []
@@ -225,6 +229,6 @@ for data_filepath in data_sets:
 	    print(i+1, history[-1]["val_acc"][-1])
 	    sys.stdout.flush()
 
-fileObject = open("/users/kjakkala/neuralwave/data/"+data_set_path.split('/')[-1]+".pkl", 'wb')
+fileObject = open(dest_file, 'wb')
 pickle.dump(history, fileObject)
 fileObject.close()
