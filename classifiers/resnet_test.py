@@ -1,14 +1,13 @@
 from tensorflow import keras
 from keras.initializers import TruncatedNormal
-from keras.callbacks import ModelCheckpoint
 from keras.engine.topology import Layer
+from keras.models import load_model
 from keras.layers import Lambda
 from keras import backend as K
 from keras.models import Model
 from keras import optimizers
 from keras import layers
 import numpy as np
-import argparse
 import pickle
 import h5py
 import math
@@ -192,43 +191,22 @@ class AMSoftmax(Layer):
         return (input_shape[0][0], self.output_dim)
 #******************************************************************************#
 
-ap = argparse.ArgumentParser()
-ap.add_argument("-s", "--src", required=True, help="source dir")
-ap.add_argument("-d", "--dst", required=True, help="destination history file")
+hf = h5py.File("/users/kjakkala/neuralwave/data/WALL_l2.h5", 'r')
+X = np.expand_dims(hf.get('X_train'), axis=-1)
+y = np.array(hf.get('y_train'))
+hf.close()
 
-args = vars(ap.parse_args())
-data_set_path = args["src"]
-dest_file = args["dst"]
+y[y == 0] = 5
+y[y == 1] = 7
+y[y == 2] = 13
+y[y == 3] = 14
+y[y == 4] = 15
+y[y == 5] = 19
+y[y == 6] = 11
 
-data_sets = os.listdir(data_set_path)
-history = []
-lr=1e-3
-epochs=100
+y = np.eye(30)[y]
 
-for data_filepath in data_sets:
-	hf = h5py.File(os.path.join(data_set_path, data_filepath), 'r')
-	X_train = np.expand_dims(hf.get('X_train'), axis=-1)
-	X_test = np.expand_dims(hf.get('X_test'), axis=-1)
-	y_train = np.eye(30)[hf.get('y_train')]
-	y_test = np.eye(30)[hf.get('y_test')]
-	hf.close()
-
-	inputs = layers.Input(shape=(X_train.shape[-2], 1), name='input')
-
-	x = conv_block_original_3l(inputs, 5, [8, 8, 16], stage=1, block='a', strides=2)
-	x = identity_block_original_3l(x, 5, [8, 8, 16], stage=1, block='b')
-
-	x = layers.Flatten()(x)
-	x = layers.Dense(30, activation='softmax')(x)
-
-	model = Model(inputs=inputs, outputs=x)
-
-	for i in range(1):
-	    model.compile(loss='categorical_crossentropy', optimizer=optimizers.Adam(lr=lr), metrics=['acc'])
-	    history.append(model.fit(x=X_train, y=y_train, epochs=epochs, validation_data=(X_test, y_test), verbose=0).history)
-	    print(i+1, history[-1]["val_acc"][-1])
-	    sys.stdout.flush()
-
-fileObject = open(dest_file, 'wb')
-pickle.dump(history, fileObject)
-fileObject.close()
+model = load_model("/users/kjakkala/neuralwave/data/resnet_2block_1e-3_5kernal.h5")
+model.summary()
+data = model.predict(x=X)
+print(np.argmax(data, axis=1))
