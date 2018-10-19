@@ -28,6 +28,8 @@ y_test = np.eye(30)[hf.get('y_test')]
 hf.close()
 
 inputs = layers.Input(shape=(X_train.shape[1:]), name='input')
+labels = layers.Input(shape=(30,), name='labels')
+
 x = layers.ZeroPadding2D(padding=((0,0), (1,1)))(inputs)
 
 x = layers.BatchNormalization(axis=-1, name='block1_bn1')(x)
@@ -55,12 +57,13 @@ x = layers.Conv2D(256, (3, 3), padding='same', name='block3_conv2')(x)
 x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)
 
 x = layers.GlobalAveragePooling2D()(x)
-x = layers.Dense(30, activation='softmax', name='predictions')(x)
+x = layers.Dense(128, activation='relu', name='embedding')(x)
+x = layers.Dense(30, activation='softmax', name='pred')(x)
 
-model = Model(inputs=inputs, outputs=x)
+model = Model(inputs=[inputs, labels], outputs=x)
 model.summary()
 
 model = multi_gpu_model(model, gpus=G)
 
 model.compile(loss='categorical_crossentropy', optimizer=optimizers.Adam(lr=lr), metrics=['acc'])
-model.fit(x=X_train, y=y_train, epochs=epochs, validation_data=(X_test, y_test), verbose=2)
+model.fit(x=[X_train, y_train], y=y_train, epochs=epochs, validation_data=([X_test, y_test], y_test), verbose=2)
