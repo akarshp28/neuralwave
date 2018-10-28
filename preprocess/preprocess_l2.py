@@ -297,7 +297,7 @@ if pca_var != -1:
 	train_X = pca.fit_transform(train_X.reshape((train_X.shape[0], -1)))
 	test_X = pca.transform(test_X.reshape((test_X.shape[0], -1)))
 
-print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(X_train.shape, X_test.shape, y_train.shape, y_test.shape))
+print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape))
 sys.stdout.flush()
 
 if dataset_file != "False":
