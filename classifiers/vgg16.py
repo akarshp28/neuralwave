@@ -2,6 +2,7 @@ from tensorflow import keras
 from keras.initializers import TruncatedNormal
 from keras.utils import multi_gpu_model
 from keras.engine.topology import Layer
+from keras.models import load_model
 from keras.layers import Lambda
 from keras import backend as K
 from keras.models import Model
@@ -21,49 +22,40 @@ epochs = 200
 G = 8
 
 hf = h5py.File(data_set_path, 'r')
-X_train = np.expand_dims(hf.get('X_train'), axis=-1)[:, 2:-2]
-X_test = np.expand_dims(hf.get('X_test'), axis=-1)[:, 2:-2]
-y_train = np.eye(30)[hf.get('y_train')]
-y_test = np.eye(30)[hf.get('y_test')]
+X_train = np.expand_dims(hf.get('X_train'), axis=-1)
+X_test = np.expand_dims(hf.get('X_test'), axis=-1)
+y_train = np.array(hf.get('y_train'))
+y_test = np.array(hf.get('y_test'))
 hf.close()
 
-inputs = layers.Input(shape=(X_train.shape[1:]), name='input')
-labels = layers.Input(shape=(30,), name='labels')
+print(X_train.shape, X_test.shape)
 
-x = layers.ZeroPadding2D(padding=((0,0), (1,1)))(inputs)
-
-x = layers.BatchNormalization(axis=-1, name='block1_bn1')(x)
-x = layers.Activation('relu', name='block1__relu1')(x)
-x = layers.Conv2D(64, (3, 3), padding='same', name='block1_conv1')(x)
-x = layers.BatchNormalization(axis=-1, name='block1_bn2')(x)
-x = layers.Activation('relu', name='block1__relu2')(x)
-x = layers.Conv2D(64, (3, 3), padding='same', name='block1_conv2')(x)
-x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')(x)
-
-x = layers.BatchNormalization(axis=-1, name='block2_bn1')(x)
-x = layers.Activation('relu', name='block2__relu1')(x)
-x = layers.Conv2D(128, (3, 3), padding='same', name='block2_conv1')(x)
-x = layers.BatchNormalization(axis=-1, name='block2_bn2')(x)
-x = layers.Activation('relu', name='block2__relu2')(x)
-x = layers.Conv2D(128, (3, 3), padding='same', name='block2_conv2')(x)
-x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')(x)
-
-x = layers.BatchNormalization(axis=-1, name='block3_bn1')(x)
-x = layers.Activation('relu', name='block3__relu1')(x)
-x = layers.Conv2D(256, (3, 3), padding='same', name='block3_conv1')(x)
-x = layers.BatchNormalization(axis=-1, name='block3_bn2')(x)
-x = layers.Activation('relu', name='block3__relu2')(x)
-x = layers.Conv2D(256, (3, 3), padding='same', name='block3_conv2')(x)
-x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)
-
-x = layers.GlobalAveragePooling2D()(x)
-x = layers.Dense(128, activation='relu', name='embedding')(x)
-x = layers.Dense(30, activation='softmax', name='pred')(x)
-
-model = Model(inputs=[inputs, labels], outputs=x)
+'''
+model = load_model('/users/kjakkala/neuralwave/data/vgg16_weights.h5')
 model.summary()
-
-model = multi_gpu_model(model, gpus=G)
-
 model.compile(loss='categorical_crossentropy', optimizer=optimizers.Adam(lr=lr), metrics=['acc'])
-model.fit(x=[X_train, y_train], y=y_train, epochs=epochs, validation_data=([X_test, y_test], y_test), verbose=2)
+print(model.evaluate(x=X_test, y=np.eye(30)[y_test]))
+'''
+models = []
+for i in range(0, 30, 2):
+	X_train_tmp = X_train[np.hstack([np.where(y_train == i), np.where(y_train == i+1)]).reshape(-1)]
+	y_train_tmp = np.eye(2)[np.hstack([np.zeros(np.where(y_train == i)[0].shape, dtype=int), np.ones(np.where(y_train == i+1)[0].shape, dtype=int)])]
+
+	X_test_tmp = X_test[np.hstack([np.where(y_test == i), np.where(y_test == i+1)]).reshape(-1)]
+	y_test_tmp = np.eye(2)[np.hstack([np.zeros(np.where(y_test == i)[0].shape, dtype=int), np.ones(np.where(y_test == i+1)[0].shape, dtype=int)])]
+
+	model = load_model('/users/kjakkala/neuralwave/data/vgg16_weights.h5')
+	model.load_weights('/users/kjakkala/neuralwave/data/vgg16_weights.h5')
+	x = layers.Dense(2, activation='softmax', name='pred')(model.layers[-2].output)
+	models.append(Model(inputs=model.inputs, outputs=x))
+
+	for layer in models[-1].layers[:-2]:
+		layer.trainable = False
+
+	models[-1].compile(loss='categorical_crossentropy', optimizer=optimizers.Adam(lr=lr), metrics=['acc'])
+	models[-1].fit(x=X_train_tmp, y=y_train_tmp, epochs=epochs, validation_data=(X_test_tmp, y_test_tmp), verbose=0)
+
+	print(models[-1].evaluate(x=X_test_tmp, y=y_test_tmp))
+
+for i in range(len(models)):
+	models[i].save('/users/kjakkala/neuralwave/data/openset/vgg16_openset_{}.h5'.format(i))

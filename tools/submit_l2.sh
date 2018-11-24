@@ -13,4 +13,4 @@
 module load anaconda3/5.0.1
 
 # ==== Main ======
-python /users/kjakkala/neuralwave/preprocess/preprocess_l2.py --src $1 --dataset $2 --scalers $3 --sampling $4 --cols $5 --pca $6
+python /users/kjakkala/neuralwave/preprocess/preprocess_l2.py --src $1 --dataset $2 --scalers $3 --sampling $4 --cols $5 --pca $6 --mc $7

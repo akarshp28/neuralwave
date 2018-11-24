@@ -221,7 +221,7 @@ ap.add_argument("--scalers", required=True, help="destination pickle file for sc
 ap.add_argument("--sampling", required=True, type=int, help="sampling rate for data")
 ap.add_argument("--cols", required=True, help="Data that needs to be computed AMP/PH/ALL")
 ap.add_argument("--pca", required=True, type=float, help="percent of variance that needs to be explained by PCA (0-1), can be (-1) to disable computing PCA")
-ap.add_argument("--mc", required=True, type=int, help="set value to (-1) if generating a single dataset else give dataset index (greater than -1) [If generating single dataset train_test_split function will get seed of 42, if generating multiple sets seed will not be set, for random splits]")
+ap.add_argument("--mc", required=True, type=int, help="set value to (1) if generating a single dataset else give dataset index (greater than 1) [If generating single dataset train_test_split function will get seed of 42, if generating multiple sets seed will not be set, for random splits]")
 
 args = vars(ap.parse_args())
 
@@ -233,7 +233,7 @@ cols = args["cols"].strip()
 pca_var = args["pca"]
 mc = args["mc"]
 
-if mc == -1:
+if mc == 1:
 	seed = 42
 else:
 	seed = None
@@ -277,65 +277,66 @@ for i in range(len(files)):
 dset_X = np.array(dset_X)
 dset_y = np.array(dset_y)
 
-train_X, test_X, train_y, test_y = train_test_split(dset_X, dset_y, test_size=0.15, random_state=seed)
-
-means = np.mean(np.mean(train_X, axis=0), axis=0)
-train_X -= means
-
-mins = np.min(np.min(train_X, axis=0), axis=0)
-maxs = np.max(np.max(train_X, axis=0), axis=0)
-train_X -= mins
-train_X /= (maxs-mins)
-
-test_X -= means
-test_X -= mins
-test_X /= (maxs-mins)
-
-pca=None
-if pca_var != -1:
-	pca = PCA(n_components=pca_var)
-	train_X = pca.fit_transform(train_X.reshape((train_X.shape[0], -1)))
-	test_X = pca.transform(test_X.reshape((test_X.shape[0], -1)))
-
-print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape))
-sys.stdout.flush()
-
-if dataset_file != "False":
-	if not os.path.exists(os.path.dirname(dataset_file)):
-		try:
-			os.makedirs(os.path.dirname(dataset_file))
-		except OSError as exc:
-			if exc.errno != errno.EEXIST:
-				raise
-
-	if mc != -1:
-		hf = h5py.File(dataset_file.format(mc), 'w')
-	else:
-		hf = h5py.File(dataset_file, 'w')
-
-	hf.create_dataset('X_train', data=train_X)
-	hf.create_dataset('y_train', data=train_y)
-	hf.create_dataset('X_test', data=test_X)
-	hf.create_dataset('y_test', data=test_y)
-	hf.close()
-
-if scalers_file != "False":
-	if not os.path.exists(os.path.dirname(scalers_file)):
-		try:
-			os.makedirs(os.path.dirname(scalers_file))
-		except OSError as exc:
-			if exc.errno != errno.EEXIST:
-				raise
-
-	dict = {'pca': pca, 'means': means, 'mins': mins, 'maxs': maxs}
-
-	if mc != -1:
-		fileObject = open(scalers_file.format(mc), 'wb')
-	else:
-		fileObject = open(scalers_file, 'wb')
-
-	pickle.dump(dict, fileObject)
-	fileObject.close()
+for iter in range(mc):
+  train_X, test_X, train_y, test_y = train_test_split(dset_X, dset_y, test_size=0.15, random_state=seed, stratify=dset_y)
+  
+  means = np.mean(np.mean(train_X, axis=0), axis=0)
+  train_X -= means
+  
+  mins = np.min(np.min(train_X, axis=0), axis=0)
+  maxs = np.max(np.max(train_X, axis=0), axis=0)
+  train_X -= mins
+  train_X /= (maxs-mins)
+  
+  test_X -= means
+  test_X -= mins
+  test_X /= (maxs-mins)
+  
+  pca=None
+  if pca_var != -1:
+  	pca = PCA(n_components=pca_var)
+  	train_X = pca.fit_transform(train_X.reshape((train_X.shape[0], -1)))
+  	test_X = pca.transform(test_X.reshape((test_X.shape[0], -1)))
+  
+  print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape))
+  sys.stdout.flush()
+  
+  if dataset_file != "False":
+  	if not os.path.exists(os.path.dirname(dataset_file)):
+  		try:
+  			os.makedirs(os.path.dirname(dataset_file))
+  		except OSError as exc:
+  			if exc.errno != errno.EEXIST:
+  				raise
+  
+  	if mc != 1:
+  		hf = h5py.File(dataset_file.format(iter), 'w')
+  	else:
+  		hf = h5py.File(dataset_file, 'w')
+  
+  	hf.create_dataset('X_train', data=train_X)
+  	hf.create_dataset('y_train', data=train_y)
+  	hf.create_dataset('X_test', data=test_X)
+  	hf.create_dataset('y_test', data=test_y)
+  	hf.close()
+  
+  if scalers_file != "False":
+  	if not os.path.exists(os.path.dirname(scalers_file)):
+  		try:
+  			os.makedirs(os.path.dirname(scalers_file))
+  		except OSError as exc:
+  			if exc.errno != errno.EEXIST:
+  				raise
+  
+  	dict = {'pca': pca, 'means': means, 'mins': mins, 'maxs': maxs}
+  
+  	if mc != 1:
+  		fileObject = open(scalers_file.format(iter), 'wb')
+  	else:
+  		fileObject = open(scalers_file, 'wb')
+  
+  	pickle.dump(dict, fileObject)
+  	fileObject.close()
 
 print("finished!!")
 
