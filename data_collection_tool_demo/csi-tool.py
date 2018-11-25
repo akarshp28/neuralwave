@@ -197,8 +197,15 @@ class App(QTabWidget):
         self.LineEdit5.setGeometry(QRect(210, 0, 130, 20))
         self.LineEdit5.setInputMask('HH:HH:HH:HH:HH:HH')
 
+        self.SettingsTab.layout.Length = QWidget(self.SettingsTab.layout)
+        self.SettingsTab.layout.Length.setGeometry(20, 290, 600, 20)
+        self.Label19 = QLabel("Packet Length", self.SettingsTab.layout.Length)
+        self.Label19.setGeometry(QRect(0, 0, 150, 20))
+        self.LineEdit6 = QLineEdit("1", self.SettingsTab.layout.Length)
+        self.LineEdit6.setGeometry(QRect(210, 0, 50, 20))
+
         self.SettingsTab.layout.Save = QWidget(self.SettingsTab.layout)
-        self.SettingsTab.layout.Save.setGeometry(20, 300, 600, 20)
+        self.SettingsTab.layout.Save.setGeometry(20, 320, 600, 20)
         self.PushButton3 = QPushButton("Save", self.SettingsTab.layout.Save)
         self.PushButton3.setGeometry(QRect(400, 0, 100, 20))
         self.PushButton3.clicked.connect(self.Save)
@@ -277,10 +284,10 @@ class App(QTabWidget):
 
         for ind in range(len(self.Devices)):
             if self.Devices[ind]['Type'] == "Transmitter":
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
-                s.connect((self.Devices[ind]['IP'],self.Port))
-                s.send(str.encode("send {} {} {} {} {} {} {} {} {} {}".format(self.Band5, self.ChannelWidth, self.GI, self.Channel, self.Power, self.Modulation, self.MAC, str(int(int(self.LineEdit2.text()) * (1000000/self.Delay))), self.Delay, str(time_start))))
-                s.close()
+                self.Devices[ind]['socket'] = socket.socket(socket.AF_INET, socket.SOCK_STREAM) 
+                self.Devices[ind]['socket'].connect((self.Devices[ind]['IP'],self.Port))
+                self.Devices[ind]['socket'].send(str.encode("send {} {} {} {} {} {} {} {} {} {} {}".format(self.Band5, self.ChannelWidth, self.GI, self.Channel, self.Power, self.Modulation, self.MAC, str(int(int(self.LineEdit2.text()) * (1000000/self.Delay))), self.Delay, str(time_start), self.PacketLength)))
+                self.Devices[ind]['socket'].close()
 
     def Save(self):
         if (self.RadioButton2.isChecked()):
@@ -306,6 +313,7 @@ class App(QTabWidget):
         self.Modulation = int(self.ComboBox1.currentIndex())+18
         self.MAC = self.LineEdit5.text()
         self.Delay = int(1000000/int(self.LineEdit3.text()))
+        self.PacketLength = int(self.LineEdit6.text())
 
     def showdialog(self, Text, Details=""):
         msg = QMessageBox()
@@ -386,6 +394,7 @@ class App(QTabWidget):
                 ax.plot(np.abs(csi.reshape(-1)), 'C0')
                 plt.pause(1e-10)
         plt.close(fig)
+        self.Devices[ind]['socket'].close()
         return 0
 
 if __name__ == '__main__':

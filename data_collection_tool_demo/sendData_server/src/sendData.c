@@ -127,8 +127,8 @@ int main(int argc, char *argv[])
         int valread = read(new_socket , buffer, 1024); 
         printf("%s %i\n", buffer, (int) time(NULL)); 
 
-        int StartTime;
-        char *Command, *Band5, *ChannelWidth, *GI, *Channel, *Power, *Modulation, *MAC, *NumOfPacketToSend, *DelayStr, *TmpTime;
+        int StartTime, Size;
+        char *Command, *Band5, *ChannelWidth, *GI, *Channel, *Power, *Modulation, *MAC, *NumOfPacketToSend, *DelayStr, *TmpSize, *TmpTime;
         Command = strtok (buffer," ");
         Band5 = strtok (NULL, " ");
         ChannelWidth = strtok (NULL, " ");
@@ -141,6 +141,8 @@ int main(int argc, char *argv[])
         DelayStr = strtok (NULL, " ");
         TmpTime = strtok (NULL, " ");
         sscanf(TmpTime, "%d", &StartTime);
+        TmpSize = strtok (NULL, " ");
+        sscanf(TmpSize, "%d", &Size);
 
         char ifName[IFNAMSIZ];
         if (strcmp(Command, "send") == 0)
@@ -221,7 +223,7 @@ int main(int argc, char *argv[])
 		 
 			/* Packet data 
 		     * We just set it to 0xaa you send arbitrary payload you like*/
-		    for(int i=1;i<=1000;i++){
+		    for(int i=1;i<=Size;i++){
 		        
 			    sendbuf[tx_len++] = 0xaa;
 		    } 
