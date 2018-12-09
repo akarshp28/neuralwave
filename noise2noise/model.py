@@ -1,10 +1,7 @@
-from tensorflow import keras
-from keras.models import Model
-from keras.layers import Input, Add, PReLU, Conv2DTranspose, Concatenate, MaxPooling2D, UpSampling2D, Dropout
-from keras.layers.convolutional import Conv2D
-from keras.layers.normalization import BatchNormalization
-from keras.callbacks import Callback
-from keras import backend as K
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Add, PReLU, Conv2DTranspose, Concatenate, MaxPooling2D, UpSampling2D, Dropout, BatchNormalization, Conv2D, Activation, ZeroPadding2D
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras import backend as K
 import tensorflow as tf
 
 eps = 1.1e-5
@@ -39,8 +36,8 @@ def tf_log10(x):
     return numerator / denominator
 
 def PSNR(y_true, y_pred):
-    max_pixel = 255.0
-    y_pred = K.clip(y_pred, 0.0, 255.0)
+    max_pixel = 1.0
+    y_pred = K.clip(y_pred, 0.0, 1.0)
     return 10.0 * tf_log10((max_pixel ** 2) / (K.mean(K.square(y_pred - y_true))))
 
 '''
@@ -83,10 +80,9 @@ def level_block(m, filters, activation_func, depth, inc_rate):
     if depth > 0:
         n = conv_block(m, filters, activation_func)
         m = MaxPooling2D()(n)
-        m = level_block(m, [inc_rate*x for x in filters], activation_func, depth - 1, )
-        if up:
-            m = UpSampling2D()(m)
-            m = Conv2D(filters[-1], 2, activation=activation_func, padding='same')(m)
+        m = level_block(m, [inc_rate*x for x in filters], activation_func, depth - 1, inc_rate)
+        m = UpSampling2D()(m)
+        m = Conv2D(filters[-1], 2, activation=activation_func, padding='same')(m)
         n = Concatenate()([n, m])
         m = conv_block(n, filters, activation_func)
     else:
@@ -94,7 +90,7 @@ def level_block(m, filters, activation_func, depth, inc_rate):
 
     return m
 
-def get_unet_model(input_channel_num, output_channel_num, filters=[16, 16, 32], activation_func='relu', depth=4, inc_rate=2):
+def get_unet_model(input_channel_num, output_channel_num, filters=[4, 4, 8], activation_func='relu', depth=3, inc_rate=2):
     i = Input(shape=(None, None, input_channel_num))
     o = level_block(i, filters, activation_func, depth, inc_rate)
     o = Conv2D(output_channel_num, 1)(o)
@@ -102,9 +98,5 @@ def get_unet_model(input_channel_num, output_channel_num, filters=[16, 16, 32], 
 
     return model
 
-def main():
-    model = get_unet_model()
-    model.summary()
-
 if __name__ == '__main__':
-    main()
+    pass

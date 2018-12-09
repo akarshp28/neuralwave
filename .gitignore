@@ -4,3 +4,7 @@ pilot/.ipynb_checkpoints
 preprocess/.ipynb_checkpoints
 weights/*
 data/*
+noise2noise/__pycache__/
+preprocess/preprocess_l1/.ipynb_checkpoints/
+tools/.ipynb_checkpoints/
+

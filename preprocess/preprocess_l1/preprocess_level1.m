@@ -1,10 +1,9 @@
 clc
 clear all
 
-addpath('/users/kjakkala/neuralwave/preprocess/preprocess_l1')
-
-srcFolder = '/users/kjakkala/neuralwave/data/WALL';
-destFolder = '/users/kjakkala/neuralwave/data/WALL_l1';
+addpath('/home/kjakkala/neuralwave/preprocess/preprocess_l1')
+srcFolder = '/home/kjakkala/neuralwave/data/CSI_RAW';
+destFolder = '/home/kjakkala/neuralwave/data/CSI_l1';
 
 d = dir(srcFolder);
 isub = [d(:).isdir];
