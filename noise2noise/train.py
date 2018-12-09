@@ -64,11 +64,11 @@ def main():
     output_path = Path(__file__).resolve().parent.joinpath(args.output_path)
     model = get_unet_model(1, 1, filters=[16, 16, 32], activation_func='relu', depth=4, inc_rate=2)
     model = multi_gpu_model(model, gpus=4)
-
+    source_noise_model = get_noise_model(args.source_noise_model)
+    target_noise_model = get_noise_model(args.target_noise_model)
+    val_noise_model = get_noise_model(args.val_noise_model)
     opt = Adam(lr=lr)
     callbacks = []
-    source_noise_model = "gaussian,50,0"
-    target_noise_model = "clean"
 
     if loss_type == "l0":
         l0 = L0Loss()
@@ -78,10 +78,8 @@ def main():
     output_path.mkdir(parents=True, exist_ok=True)
 
     model.compile(optimizer=opt, loss=loss_type, metrics=[PSNR])
-    source_noise_model = get_noise_model(args.source_noise_model)
-    target_noise_model = get_noise_model(args.target_noise_model)
-    generator = NoisyImageGenerator(train_dir, args.source_noise_model, args.target_noise_model, batch_size=batch_size)
-    val_generator = ValGenerator(test_dir, args.val_noise_model, args.target_noise_model, batch_size=batch_size)
+    generator = NoisyImageGenerator(train_dir, source_noise_model, target_noise_model, batch_size=batch_size)
+    val_generator = ValGenerator(test_dir, val_noise_model, target_noise_model, batch_size=batch_size)
     callbacks.append(LearningRateScheduler(schedule=Schedule(nb_epochs, lr)))
     callbacks.append(ModelCheckpoint(str(output_path) + "/weights.{epoch:03d}-{val_loss:.3f}-{val_PSNR:.5f}.hdf5",
                                  monitor="val_PSNR",
