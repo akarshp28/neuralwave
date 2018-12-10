@@ -93,7 +93,7 @@ def level_block(m, filters, activation_func, depth, inc_rate):
 def get_unet_model(input_channel_num, output_channel_num, filters=[4, 4, 8], activation_func='relu', depth=3, inc_rate=2):
     i = Input(shape=(None, None, input_channel_num))
     o = level_block(i, filters, activation_func, depth, inc_rate)
-    o = Conv2D(output_channel_num, 1)(o)
+    o = Conv2D(output_channel_num, 1, activation='sigmoid')(o)
     model = Model(inputs=i, outputs=o)
 
     return model
