@@ -1,12 +1,12 @@
-import tensorflow as tf
-from tf.keras.models import Model
-from tf.keras.layers import Input, Add, PReLU, Conv2DTranspose, Concatenate, MaxPooling2D, UpSampling2D, Dropout, BatchNormalization, Conv2D, Activation, ZeroPadding2D
-from tf.keras.callbacks import Callback
-from tf.keras.initializers import TruncatedNormal
-from tf.keras import backend as K
+from tensorflow import keras
+from keras.models import Model
+from keras.layers import Input, Add, PReLU, Conv2DTranspose, Concatenate, MaxPooling2D, UpSampling2D, Dropout, BatchNormalization, Conv2D, Activation, ZeroPadding2D
+from keras.callbacks import Callback
+from keras.initializers import TruncatedNormal
 from keras.engine.topology import Layer
-from tf.keras.layers import Lambda
-from tf.keras import backend as K
+from keras import backend as K
+from keras.layers import Lambda
+from keras import backend as K
 
 eps = 1.1e-5
 
