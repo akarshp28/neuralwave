@@ -1,9 +1,8 @@
-from tensorflow import keras
 from model import identity_block, conv_block
-from keras.utils import multi_gpu_model
-from keras.models import Model
-from keras import optimizers
-from keras import layers
+from tensorflow.keras.utils import multi_gpu_model
+from tensorflow.keras.models import Model
+from tensorflow.keras import optimizers
+from tensorflow.keras import layers
 import numpy as np
 import argparse
 import h5py
@@ -37,9 +36,9 @@ def main():
     y_test = np.eye(40)[hf.get('y_test')]
     hf.close()
 
-    inputs = layers.Input(shape=(None, None, 1))
+    input_layer = layers.Input(shape=(X_train.shape[1:]))
 
-    x = layers.Conv2D(64, (7, 7), strides=(2, 2))(inputs)
+    x = layers.Conv2D(64, (7, 7), strides=(2, 2))(input_layer)
     x = layers.BatchNormalization(axis=-1)(x)
     x = layers.Activation('relu')(x)
     x = layers.MaxPooling2D((3, 3), strides=(2, 2))(x)
@@ -56,10 +55,10 @@ def main():
     x = conv_block(x, [512, 2048], "relu")
     x = identity_block(x, [512, 2048], "relu")
 
-    x = layers.GlobalAveragePooling2D(name='avg_pool')(x)
+    x = layers.GlobalAveragePooling2D()(x)
     x = layers.Dense(40, activation='softmax')(x)
 
-    model_base = Model(inputs=inputs, outputs=x)
+    model_base = Model(inputs=input_layer, outputs=x)
     model_base.summary()
     model = multi_gpu_model(model_base, gpus=4)
 
