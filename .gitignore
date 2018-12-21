@@ -7,4 +7,6 @@ data/*
 noise2noise/__pycache__/
 preprocess/preprocess_l1/.ipynb_checkpoints/
 tools/.ipynb_checkpoints/
+classifiers/__pycache__/
+classifiers/resnet.h5
 

@@ -34,41 +34,6 @@ class UpdateAnnealingParameter(Callback):
         if self.verbose > 0:
             print('\nEpoch %05d: UpdateAnnealingParameter reducing gamma to %s.' % (epoch + 1, new_gamma))
 
-class AMSoftmax(Layer):
-    def __init__(self, output_dim, s, m, **kwargs):
-        self.output_dim = output_dim
-        self.s = s
-        self.m = m
-        super(AMSoftmax, self).__init__(**kwargs)
-
-    def build(self, input_shape):
-        # Create a trainable weight variable for this layer.
-        self.kernel = self.add_weight(name='kernel',
-                                      shape=(input_shape[0][-1], self.output_dim),
-                                      initializer=TruncatedNormal(mean=0.0, stddev=1.0),
-                                      trainable=True)
-
-        self.bias = self.add_weight(name='bias',
-    	 			    shape=(self.output_dim, ),
-				    initializer=TruncatedNormal(mean=0.0, stddev=1.0),
- 		                    trainable=True)
-
-        super(AMSoftmax, self).build(input_shape)
-
-    def call(self, inputs):
-        x = inputs[0]
-        y = inputs[1]
-        kernel_norm = K.l2_normalize(self.kernel, 0)
-        cos_theta = K.dot(x, kernel_norm)
-        cos_theta = K.clip(cos_theta, -1,1) # for numerical steady
-        cos_theta = K.bias_add(cos_theta, self.bias, data_format='channels_last')
-        phi = cos_theta - self.m
-        adjust_theta = self.s * K.tf.where(K.tf.equal(y, 1), phi, cos_theta)
-        return K.softmax(adjust_theta)
-
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0][0], self.output_dim)
-
 def tf_log10(x):
     numerator = tf.log(x)
     denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
@@ -142,7 +107,7 @@ def identity_block(input_tensor, filters, activation_func):
     x = Activation(activation_func)(x)
     x = Conv2D(filters2, (3, 3), padding='same')(x)
 
-    x = Concatenate([x, input_tensor])
+    x = Concatenate()([x, input_tensor])
     return x
 
 def conv_block(input_tensor, filters, activation_func, strides=(2, 2)):
@@ -161,7 +126,7 @@ def conv_block(input_tensor, filters, activation_func, strides=(2, 2)):
     shortcut = Activation(activation_func)(shortcut)
     shortcut = Conv2D(filters2, (1, 1), strides=strides)(shortcut)
 
-    x = Concatenate([x, shortcut])
+    x = Concatenate()([x, shortcut])
     return x
 
 def level_block(m, filters, activation_func, depth, inc_rate):
