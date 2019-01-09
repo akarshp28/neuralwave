@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 
-from sklearn.model_selection import train_test_split
-from sklearn.decomposition import PCA
 from scipy.io import loadmat
 import numpy as np
 import argparse
 import pickle
-import time
 import h5py
-import math
 import sys
 import os
 
@@ -196,13 +192,13 @@ def smooth(x,window_len):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y[(window_len//2):-(window_len//2)]
 
-def compute_data(file_path, sampling, cols):
+def compute_data(file_path, sampling, cols1, cols2):
     if (not os.path.isfile(file_path)):
         raise ValueError("File dosn't exits")
 
     csi_trace = get_csi(loadmat(file_path))[2000:10000]
     csi_trace = csi_trace[::sampling]
-    csi_trace = fill_gaps(csi_trace, technique='mean')[:, :cols]
+    csi_trace = fill_gaps(csi_trace, technique='mean')[:, cols1:cols2]
 
     return csi_trace.astype(np.float32)
 
@@ -219,19 +215,34 @@ ap.add_argument("--src", required=True, help="source dir")
 ap.add_argument("--file", required=True, help="h5 file for dataset")
 ap.add_argument("--scalers", required=True, help="pkl file with scalers")
 ap.add_argument("--sampling", required=True, type=int, help="sampling rate for data")
-ap.add_argument("--cols", required=True, type=int, help="number of columns to keep (1-540)")
+ap.add_argument("--cols", required=True, help="Data that needs to be computed AMP/PH/ALL")
 args = vars(ap.parse_args())
 
-src_path = args["src"]
-dest_file = args["file"]
-scalers_file = args["scalers"]
+src_path = args["src"].strip()
+dest_file = args["file"].strip()
+scalers_file = args["scalers"].strip()
 sampling = args["sampling"]
-cols = args["cols"]
+cols = args["cols"].strip()
+
+if cols == "AMP":
+        cols1 = 0
+        cols2 = 270
+        cols = 270
+elif cols == "PH":
+        cols1 = 270
+        cols2 = 540
+        cols = 270
+elif cols == "ALL":
+        cols1 = 0
+        cols2 = 540
+        cols = 540
+else:
+        raise ValueError("Check cols argument!! Got: {} | Acceptable arguments (AMP/PH/ALL)".format(cols))
 
 filter_size = 91
 rows = int(8000/sampling)
 
-print("rows: ", rows, "cols: ", cols)
+print("rows:", rows, "| cols:", cols1, "-", cols2)
 sys.stdout.flush()
 
 files, labels = read_samples(src_path, ".mat")
@@ -239,7 +250,7 @@ files, labels = read_samples(src_path, ".mat")
 dset_X = []
 dset_y = []
 for i in range(len(files)):
-    tmp = compute_data(files[i], sampling, cols)
+    tmp = compute_data(files[i], sampling, cols1, cols2)
     if (tmp.shape == (rows, cols)):
         for j in range(cols):
             tmp[:, j] = smooth(tmp[:, j], filter_size)
@@ -261,11 +272,10 @@ fileObject.close()
 dset_X -= dict['means']
 dset_X -= dict['mins']
 dset_X /= (dict['maxs'] - dict['mins'])
-dset_X = dict['pca'].transform(dset_X.reshape((dset_X.shape[0], -1)))
 
 hf = h5py.File(dest_file, 'w')
-hf.create_dataset('X_train', data=dset_X)
-hf.create_dataset('y_train', data=dset_y)
+hf.create_dataset('X_data', data=dset_X)
+hf.create_dataset('y_data', data=dset_y)
 hf.close()
 
 print("finished!!")

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from sklearn.model_selection import train_test_split
-from sklearn.decomposition import PCA
 from scipy.io import loadmat
 import numpy as np
 import argparse
@@ -287,7 +286,7 @@ for iter in range(mc):
   maxs = np.max(np.max(train_X, axis=0), axis=0)
   train_X -= mins
   train_X /= (maxs-mins)
-  
+
   test_X -= means
   test_X -= mins
   test_X /= (maxs-mins)

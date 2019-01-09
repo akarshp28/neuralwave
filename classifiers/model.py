@@ -1,12 +1,10 @@
-from tensorflow import keras
-from keras.models import Model
-from keras.layers import Input, Add, PReLU, Conv2DTranspose, Concatenate, MaxPooling2D, UpSampling2D, Dropout, BatchNormalization, Conv2D, Conv1D,Activation, ZeroPadding2D
-from keras.callbacks import Callback
-from keras.initializers import TruncatedNormal
-from keras.engine.topology import Layer
-from keras import backend as K
-from keras.layers import Lambda
-from keras import backend as K
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Add, PReLU, Conv2DTranspose, Concatenate, MaxPooling2D, UpSampling2D, Dropout, BatchNormalization, Conv2D, Conv1D, Activation, ZeroPadding2D
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.initializers import TruncatedNormal
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers import Lambda
+from tensorflow.keras import backend as K
 
 eps = 1.1e-5
 
@@ -67,11 +65,11 @@ def identity_block_1D(input_tensor, filters, activation_func):
 
     x = BatchNormalization(axis=bn_axis)(input_tensor)
     x = Activation(activation_func)(x)
-    x = Conv1D(filters1, (1, 1))(x)
+    x = Conv1D(filters1, (1))(x)
 
     x = BatchNormalization(axis=bn_axis)(x)
     x = Activation(activation_func)(x)
-    x = Conv1D(filters2, (3, 3), padding='same')(x)
+    x = Conv1D(filters2, (3), padding='same')(x)
 
     x = Concatenate([x, input_tensor])
     return x
@@ -82,15 +80,15 @@ def conv_block_1D(input_tensor, filters, activation_func, strides=(2, 2)):
 
     x = BatchNormalization(axis=bn_axis)(input_tensor)
     x = Activation(activation_func)(x)
-    x = Conv1D(filters1, (1, 1), strides=strides)(x)
+    x = Conv1D(filters1, (1), strides=strides)(x)
 
     x = BatchNormalization(axis=bn_axis)(x)
     x = Activation(activation_func)(x)
-    x = Conv1D(filters2, (3, 3), padding='same')(x)
+    x = Conv1D(filters2, (3), padding='same')(x)
 
     shortcut = BatchNormalization(axis=bn_axis)(input_tensor)
     shortcut = Activation(activation_func)(shortcut)
-    shortcut = Conv2D(filters2, (1, 1), strides=strides)(shortcut)
+    shortcut = Conv2D(filters2, (1), strides=strides)(shortcut)
 
     x = Concatenate([x, shortcut])
     return x

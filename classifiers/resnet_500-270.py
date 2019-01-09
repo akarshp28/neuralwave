@@ -18,6 +18,8 @@ def get_args():
                         help="learning rate decay")
     parser.add_argument("--nb_epochs", type=int, required=True, default="25",
                         help="number of training epochs")
+    parser.add_argument("--num_classes", type=int, required=True, default="40",
+                        help="number of classee")
     args = parser.parse_args()
 
     return args
@@ -28,13 +30,16 @@ def main():
     epochs=args.nb_epochs
     data_dir=args.data_dir
     decay=args.decay
+    num_classes=args.num_classes
 
     hf = h5py.File(data_dir, 'r')
     X_train = np.expand_dims(hf.get('X_train'), axis=-1)
     X_test = np.expand_dims(hf.get('X_test'), axis=-1)
-    y_train = np.eye(40)[hf.get('y_train')]
-    y_test = np.eye(40)[hf.get('y_test')]
+    y_train = np.eye(num_classes)[hf.get('y_train')]
+    y_test = np.eye(num_classes)[hf.get('y_test')]
     hf.close()
+
+    print(X_train.shape)
 
     input_layer = layers.Input(shape=(X_train.shape[1:]))
 
@@ -56,7 +61,8 @@ def main():
     x = identity_block(x, [512, 2048], "relu")
 
     x = layers.GlobalAveragePooling2D()(x)
-    x = layers.Dense(40, activation='softmax')(x)
+    x = layers.Dense(num_classes, activation=None)(x)
+    x = layers.Activation('softmax')(x)
 
     model_base = Model(inputs=input_layer, outputs=x)
     model_base.summary()
