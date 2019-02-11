@@ -2,8 +2,8 @@ clc
 clear all
 
 addpath('/home/kjakkala/neuralwave/preprocess/preprocess_l1')
-srcFolder = '/home/kjakkala/neuralwave/data/Intruder_RAW';
-destFolder = '/home/kjakkala/neuralwave/data/Intruder_l1';
+srcFolder = '/home/kjakkala/neuralwave/data/random_data_RAW';
+destFolder = '/home/kjakkala/neuralwave/data/random_data_l1';
 
 d = dir(srcFolder);
 isub = [d(:).isdir];

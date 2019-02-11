@@ -70,6 +70,8 @@ def fill_gaps(csi_trace, technique):
         csi_entry = csi_trace[ind]
 
         scaled_csi = get_scaled_csi(csi_entry)
+        scaled_csi = np.fft.fft(np.fft.ifft(scaled_csi, n=30, axis=-1)[..., :20], n=30, axis=-1)
+
         amp = np.absolute(scaled_csi)
         ph = np.angle(scaled_csi)
 
