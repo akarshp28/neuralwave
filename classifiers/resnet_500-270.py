@@ -39,6 +39,9 @@ def main():
     y_test = np.eye(num_classes)[hf.get('y_test')]
     hf.close()
 
+    X_train = X_train[:, :, ::2]
+    X_test = X_test[:, :, ::2]
+
     print(X_train.shape)
 
     input_layer = layers.Input(shape=(X_train.shape[1:]))
