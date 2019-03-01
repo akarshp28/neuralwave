@@ -5,6 +5,7 @@ from sklearn.decomposition import PCA
 from joblib import Parallel, delayed 
 from scipy.io import loadmat
 import numpy as np
+from random import shuffle
 import argparse
 import pickle
 import time
@@ -229,22 +230,24 @@ def compute_data(file_path, sampling, cols1, cols2, label, filter_size):
 #sampling 16: 500
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--src", required=True, help="source data dir")
-ap.add_argument("--dst", required=True, help="h5 file for dataset")
-ap.add_argument("--scalers", required=True, help="h5 file with scalers")
+ap.add_argument("--src", required=True, help="source data directory")
+ap.add_argument("--dataset", required=True, help="destination h5py file for dataset, can be (False) to disable saving dataset")
+ap.add_argument("--sampling", required=True, type=int, help="sampling rate for data")
+ap.add_argument("--cols", required=True, help="Data that needs to be computed AMP/PH/ALL")
+ap.add_argument("--mc", required=True, type=int, help="set value to (1) if generating a single dataset else give dataset index (greater than 1) [If generating single dataset train_test_split function will get seed of 42, if generating multiple sets seed will not be set, for random splits]")
+
 args = vars(ap.parse_args())
 
 src_path = args["src"].strip()
-dest_file = args["dst"].strip()
-scalers_file = args["scalers"].strip()
+dataset_file = args["dataset"].strip()
+sampling = args["sampling"]
+cols = args["cols"].strip()
+mc = args["mc"]
 
-hf = h5py.File(scalers_file, 'r')
-means = np.array(hf.get('means'))
-mins = np.array(hf.get('mins'))
-maxs = np.array(hf.get('maxs'))
-sampling = np.array(hf.get('sampling'))
-cols = np.array(hf.get('cols'))
-hf.close()
+if mc == 1:
+	seed = 42
+else:
+	seed = None
 
 if cols == "AMP":
         cols1 = 0
@@ -286,16 +289,73 @@ for i in range(dset_X.shape[0]):
 dset_X = np.delete(dset_X, delete_inds, 0)
 dset_y = np.delete(dset_y, delete_inds, 0)
 
-print("Data shape: ", dset_y.shape, dset_X.shape)
+class_inds = np.arange(len(classes))
 
-dset_X -= means
-dset_X -= mins
-dset_X /= (maxs-mins)
+for iter in range(mc):
+    np.random.shuffle(class_inds)
 
-hf = h5py.File(dest_file, 'w')
-hf.create_dataset('X_data', data=dset_X)
-hf.create_dataset('y_data', data=dset_y)
-hf.create_dataset('labels', data=classes)
-hf.close()
+    del classes[class_inds[:10]]
+    intruder_dset_X = []
+    intruder_dset_y = []
+    flagged_inds = []
+    for intruder_index in class_inds[:10]:
+        intruder_inds = np.where(dset_y == intruder_index)[0]
+        intruder_dset_X.extend(dset_X[intruder_inds])
+        intruder_dset_y.extend(-1*np.ones_like(dset_y[intruder_inds]))       
+        flagged_inds.extend(intruder_inds)
+    intruder_dset_X = np.array(intruder_dset_X)
+    intruder_dset_y = np.array(intruder_dset_y)
 
-print("finished!!")
+    new_dset_X = np.delete(dset_X, flagged_inds, 0)
+    new_dset_y = np.delete(dset_y, flagged_inds, 0)
+
+    new_tmp_ind = 0
+    for tmp_ind in class_inds[10:]:
+        new_dset_y[np.where(new_dset_y == tmp_ind)] = new_tmp_ind
+        new_tmp_ind += 1
+
+    train_X, test_X, train_y, test_y = train_test_split(new_dset_X, new_dset_y, test_size=0.15, random_state=seed, stratify=new_dset_y)
+
+    print("X_train: {} | X_test: {} | y_train: {} | y_test: {} | X_intruder: {} | y_intruder: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape, intruder_dset_X.shape, intruder_dset_y.shape))
+
+    means = np.mean(np.mean(train_X, axis=0), axis=0)
+    train_X -= means
+    test_X -= means
+    intruder_dset_X -= means
+
+    mins = np.max(np.min(train_X, axis=0), axis=0)
+    maxs = np.max(np.max(train_X, axis=0), axis=0)
+    train_X -= mins
+    train_X /= (maxs-mins)
+    test_X -= mins
+    test_X /= (maxs-mins)
+    intruder_dset_X -= mins
+    intruder_dset_X /= (maxs-mins)
+
+    if not os.path.exists(os.path.dirname(dataset_file)):
+        try:
+            os.makedirs(os.path.dirname(dataset_file))
+        except OSError as exc:
+            if exc.errno != errno.EEXIST:
+                raise
+
+    if mc != 1:
+        hf = h5py.File(dataset_file.format(iter), 'w')
+    else:
+        hf = h5py.File(dataset_file, 'w')
+
+    hf.create_dataset('X_train', data=train_X)
+    hf.create_dataset('y_train', data=train_y)
+    hf.create_dataset('X_test', data=test_X)
+    hf.create_dataset('y_test', data=test_y)
+    hf.create_dataset('X_intruder', data=intruder_dset_X)
+    hf.create_dataset('y_intruder', data=intruder_dset_y)
+    hf.create_dataset('labels', data=classes)
+    hf.create_dataset('means', data=means)  
+    hf.create_dataset('mins', data=mins)  
+    hf.create_dataset('maxs', data=maxs) 
+    hf.create_dataset('sampling', data=sampling)  
+    hf.create_dataset('cols', data="AMP")
+    hf.close()
+
+    print("finished!!")

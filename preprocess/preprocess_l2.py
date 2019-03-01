@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from joblib import Parallel, delayed 
 from scipy.io import loadmat
 import numpy as np
 import argparse
@@ -62,6 +64,12 @@ def apply_phcorrect(ph_raw):
         restore_ph_mat.append(stack_crc_ph[i, :].reshape((3,3)))
     return np.array(restore_ph_mat).T
 
+def power_delay_profile(data, keep_bins=10):
+    data = np.concatenate([np.zeros_like(data[..., 0:1]), data, np.expand_dims(data[..., -1], axis=-1)], axis=-1)
+    pdf = np.fft.irfft(data, axis=-1)
+    pdf[..., keep_bins:] = 0
+    return np.fft.fft(pdf, n=(data.shape[-1]*2)+2, axis=-1)[..., 1:data.shape[-1]-1]
+
 def fill_gaps(csi_trace, technique):
     amp_data = []
     ph_data = []
@@ -69,9 +77,7 @@ def fill_gaps(csi_trace, technique):
     for ind in range(len(csi_trace)):
         csi_entry = csi_trace[ind]
 
-        scaled_csi = get_scaled_csi(csi_entry)
-        scaled_csi = np.fft.fft(np.fft.ifft(scaled_csi, n=30, axis=-1)[..., :20], n=30, axis=-1)
-
+        scaled_csi = power_delay_profile(get_scaled_csi(csi_entry))
         amp = np.absolute(scaled_csi)
         ph = np.angle(scaled_csi)
 
@@ -189,7 +195,7 @@ def read_samples(dataset_path, endswith=".csv"):
                 labels.append(label)
         label += 1
 
-    return datapaths, labels
+    return datapaths, labels, classes
 
 def smooth(x,window_len):
     s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
@@ -197,15 +203,22 @@ def smooth(x,window_len):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y[(window_len//2):-(window_len//2)]
 
-def compute_data(file_path, sampling, cols1, cols2):
+def compute_data(file_path, sampling, cols1, cols2, label, filter_size):
     if (not os.path.isfile(file_path)):
         raise ValueError("File dosn't exits")
 
+    pca = PCA(3)
     csi_trace = get_csi(loadmat(file_path))[2000:10000]
     csi_trace = csi_trace[::sampling]
-    csi_trace = fill_gaps(csi_trace, technique='mean')[:, cols1:cols2]
+    csi_trace = fill_gaps(csi_trace, technique='mean')[:, cols1:cols2]    
+    csi_trace = pca.fit_transform(csi_trace)
+    csi_trace = pca.inverse_transform(csi_trace)
+    csi_trace -= np.mean(csi_trace, axis=0)
 
-    return csi_trace.astype(np.float32)
+    for i in range(csi_trace.shape[1]):
+      csi_trace[:, i] = smooth(csi_trace[:, i], filter_size)
+
+    return csi_trace.astype(np.float32), label
 
 #******************************************************************************#
 
@@ -218,20 +231,16 @@ def compute_data(file_path, sampling, cols1, cols2):
 ap = argparse.ArgumentParser()
 ap.add_argument("--src", required=True, help="source data directory")
 ap.add_argument("--dataset", required=True, help="destination h5py file for dataset, can be (False) to disable saving dataset")
-ap.add_argument("--scalers", required=True, help="destination pickle file for scalers, can be (False) to disable saving scalers")
 ap.add_argument("--sampling", required=True, type=int, help="sampling rate for data")
 ap.add_argument("--cols", required=True, help="Data that needs to be computed AMP/PH/ALL")
-ap.add_argument("--pca", required=True, type=float, help="percent of variance that needs to be explained by PCA (0-1), can be (-1) to disable computing PCA")
 ap.add_argument("--mc", required=True, type=int, help="set value to (1) if generating a single dataset else give dataset index (greater than 1) [If generating single dataset train_test_split function will get seed of 42, if generating multiple sets seed will not be set, for random splits]")
 
 args = vars(ap.parse_args())
 
 src_path = args["src"].strip()
 dataset_file = args["dataset"].strip()
-scalers_file = args["scalers"].strip()
 sampling = args["sampling"]
 cols = args["cols"].strip()
-pca_var = args["pca"]
 mc = args["mc"]
 
 if mc == 1:
@@ -257,51 +266,44 @@ else:
 filter_size = 91
 rows = int(8000/sampling)
 
-print("rows:", rows, "| cols:", cols1, "-", cols2, "| PCA Var:", pca_var)
+print("rows:", rows, "| cols:", cols1, "-", cols2)
 sys.stdout.flush()
 
-files, labels = read_samples(src_path, ".mat")
+files, labels, classes = read_samples(src_path, ".mat")
+classes = [n.encode("ascii", "ignore") for n in classes]
 
-dset_X = []
-dset_y = []
-
-for i in range(len(files)):
-    tmp = compute_data(files[i], sampling, cols1, cols2)
-    if (tmp.shape == (rows, cols)):
-        for j in range(cols):
-            tmp[:, j] = smooth(tmp[:, j], filter_size)
-        dset_X.append(tmp)
-        dset_y.append(labels[i])
-    else:
-        print("File dimension error | File:{} | Size:{}", files[i], tmp.shape)
-
+dset_X, dset_y = zip(*Parallel(n_jobs=-2)(delayed(compute_data)(files[ind], sampling, cols1, cols2, labels[ind], filter_size) for ind in range(len(files))))
 dset_X = np.array(dset_X)
 dset_y = np.array(dset_y)
 
+delete_inds = []
+
+print(dset_X.shape, dset_y.shape)
+
+for i in range(dset_X.shape[0]):
+    if (dset_X[i].shape != (rows, cols)):
+        delete_inds.append(i)
+        print("File dimension error | File:{} | Size:{}", files[i], dset_X[i].shape)
+
+dset_X = np.delete(dset_X, delete_inds, 0)
+dset_y = np.delete(dset_y, delete_inds, 0)
+
 for iter in range(mc):
   train_X, test_X, train_y, test_y = train_test_split(dset_X, dset_y, test_size=0.15, random_state=seed, stratify=dset_y)
-  
+
+  print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape))
+
   means = np.mean(np.mean(train_X, axis=0), axis=0)
   train_X -= means
-  
-  mins = np.min(np.min(train_X, axis=0), axis=0)
+  test_X -= means
+
+  mins = np.max(np.min(train_X, axis=0), axis=0)
   maxs = np.max(np.max(train_X, axis=0), axis=0)
   train_X -= mins
   train_X /= (maxs-mins)
-
-  test_X -= means
   test_X -= mins
   test_X /= (maxs-mins)
-  
-  pca=None
-  if pca_var != -1:
-  	pca = PCA(n_components=pca_var)
-  	train_X = pca.fit_transform(train_X.reshape((train_X.shape[0], -1)))
-  	test_X = pca.transform(test_X.reshape((test_X.shape[0], -1)))
-  
-  print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape))
-  sys.stdout.flush()
-  
+
   if dataset_file != "False":
   	if not os.path.exists(os.path.dirname(dataset_file)):
   		try:
@@ -315,29 +317,16 @@ for iter in range(mc):
   	else:
   		hf = h5py.File(dataset_file, 'w')
   
-  	hf.create_dataset('X_train', data=train_X)
-  	hf.create_dataset('y_train', data=train_y)
-  	hf.create_dataset('X_test', data=test_X)
-  	hf.create_dataset('y_test', data=test_y)
-  	hf.close()
-  
-  if scalers_file != "False":
-  	if not os.path.exists(os.path.dirname(scalers_file)):
-  		try:
-  			os.makedirs(os.path.dirname(scalers_file))
-  		except OSError as exc:
-  			if exc.errno != errno.EEXIST:
-  				raise
-  
-  	dict = {'pca': pca, 'means': means, 'mins': mins, 'maxs': maxs}
-  
-  	if mc != 1:
-  		fileObject = open(scalers_file.format(iter), 'wb')
-  	else:
-  		fileObject = open(scalers_file, 'wb')
-  
-  	pickle.dump(dict, fileObject)
-  	fileObject.close()
+  hf.create_dataset('X_train', data=train_X)
+  hf.create_dataset('y_train', data=train_y)
+  hf.create_dataset('X_test', data=test_X)
+  hf.create_dataset('y_test', data=test_y)
+  hf.create_dataset('labels', data=classes)
+  hf.create_dataset('means', data=means)  
+  hf.create_dataset('mins', data=mins)  
+  hf.create_dataset('maxs', data=maxs) 
+  hf.create_dataset('sampling', data=sampling)  
+  hf.create_dataset('cols', data=args["cols"].strip())
+  hf.close()
 
 print("finished!!")
-
