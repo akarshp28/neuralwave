@@ -1,4 +1,4 @@
-data=csvread('/home/kjakkala/neuralwave/data/random_data_l1/ting_li/ting1.csv');
+data=csvread('/home/kjakkala/neuralwave/theoritical_derivation/champ_perp1_pca.csv');
 
 data=data(:,:);
 [s,f,t]=spectrogram(data(:,1),gausswin(1024),986,1024,1000,'yaxis');
@@ -17,7 +17,7 @@ for k=1:20
     s_magnitude_denoise(index)=0;
     x=x+s_magnitude_denoise;
 end 
-person3=x(:, :);
+person3=x(10:80, :);
 imagesc(flipud(person3));
 xticklabels = 0:1:10;
 xticks = linspace(0, size(person3, 2), numel(xticklabels));
