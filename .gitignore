@@ -1,12 +1,6 @@
-autoencoder/.ipynb_checkpoints
 classifiers/.ipynb_checkpoints
-pilot/.ipynb_checkpoints
 preprocess/.ipynb_checkpoints
-weights/*
+preprocess/preprocess_l1/.ipynb_checkpoints
+tools/.ipynb_checkpoints
+theoritical_derivation/.ipynb_checkpoints
 data/*
-noise2noise/__pycache__/
-preprocess/preprocess_l1/.ipynb_checkpoints/
-tools/.ipynb_checkpoints/
-classifiers/__pycache__/
-classifiers/resnet.h5
-
