@@ -71,10 +71,10 @@ def identity_block_1D(input_tensor, filters, activation_func):
     x = Activation(activation_func)(x)
     x = Conv1D(filters2, (3), padding='same')(x)
 
-    x = Concatenate([x, input_tensor])
+    x = Concatenate()([x, input_tensor])
     return x
 
-def conv_block_1D(input_tensor, filters, activation_func, strides=(2, 2)):
+def conv_block_1D(input_tensor, filters, activation_func, strides=2):
     filters1, filters2 = filters
     bn_axis = -1
 
@@ -88,9 +88,9 @@ def conv_block_1D(input_tensor, filters, activation_func, strides=(2, 2)):
 
     shortcut = BatchNormalization(axis=bn_axis)(input_tensor)
     shortcut = Activation(activation_func)(shortcut)
-    shortcut = Conv2D(filters2, (1), strides=strides)(shortcut)
+    shortcut = Conv1D(filters2, (1), strides=strides)(shortcut)
 
-    x = Concatenate([x, shortcut])
+    x = Concatenate()([x, shortcut])
     return x
 
 def identity_block(input_tensor, filters, activation_func):
