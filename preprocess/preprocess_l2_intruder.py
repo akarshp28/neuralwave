@@ -5,6 +5,7 @@ from sklearn.decomposition import PCA
 from joblib import Parallel, delayed 
 from scipy.io import loadmat
 import numpy as np
+from random import shuffle
 import argparse
 import pickle
 import time
@@ -181,7 +182,7 @@ def get_scaled_csi(csi_st):
 def read_samples(dataset_path, endswith=".csv"):
     datapaths, labels = list(), list()
     label = 0
-    classes = sorted([f for f in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, f)) and not f.startswith('.')])
+    classes = sorted(os.walk(dataset_path).__next__()[1])
 
     # List each sub-directory (the classes)
     for c in classes:
@@ -211,11 +212,13 @@ def compute_data(file_path, sampling, cols1, cols2, label, filter_size):
     csi_trace = get_csi(loadmat(file_path))[2000:10000]
     csi_trace = csi_trace[::sampling]
     csi_trace = fill_gaps(csi_trace, technique='mean')[:, cols1:cols2]    
-    csi_trace -= np.mean(csi_trace, axis=0)
     csi_trace = pca.fit_transform(csi_trace)
     csi_trace = pca.inverse_transform(csi_trace)
+    csi_trace -= np.mean(csi_trace, axis=0)
+
     for i in range(csi_trace.shape[1]):
         csi_trace[:, i] = smooth(csi_trace[:, i], filter_size)
+
     return csi_trace.astype(np.float32), label
 
 #******************************************************************************#
@@ -268,7 +271,7 @@ print("rows:", rows, "| cols:", cols1, "-", cols2)
 sys.stdout.flush()
 
 files, labels, classes = read_samples(src_path, ".mat")
-classes = [n.encode("ascii", "ignore") for n in classes]
+classes_tot = [n.encode("ascii", "ignore") for n in classes]
 
 dset_X, dset_y = zip(*Parallel(n_jobs=-2)(delayed(compute_data)(files[ind], sampling, cols1, cols2, labels[ind], filter_size) for ind in range(len(files))))
 dset_X = np.array(dset_X)
@@ -287,44 +290,68 @@ dset_X = np.delete(dset_X, delete_inds, 0)
 dset_y = np.delete(dset_y, delete_inds, 0)
 
 for iter in range(mc):
-  train_X, test_X, train_y, test_y = train_test_split(dset_X, dset_y, test_size=0.15, random_state=seed, stratify=dset_y)
+    class_inds = np.arange(len(classes_tot))
+    classes = np.delete(classes_tot, class_inds[iter], 0)
 
-  print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape))
+    intruder_dset_X = []
+    intruder_dset_y = []
+    flagged_inds = []
+    intruder_index = class_inds[iter]
+    intruder_inds = np.where(dset_y == intruder_index)[0]
+    intruder_dset_X.extend(dset_X[intruder_inds])
+    intruder_dset_y.extend(-1*np.ones_like(dset_y[intruder_inds]))       
+    flagged_inds.extend(intruder_inds)
+    intruder_dset_X = np.array(intruder_dset_X)
+    intruder_dset_y = np.array(intruder_dset_y)
 
-  means = np.mean(np.mean(train_X, axis=0), axis=0)
-  train_X -= means
-  test_X -= means
+    new_dset_X = np.delete(dset_X, flagged_inds, 0)
+    new_dset_y = np.delete(dset_y, flagged_inds, 0)
 
-  mins = np.max(np.min(train_X, axis=0), axis=0)
-  maxs = np.max(np.max(train_X, axis=0), axis=0)
-  train_X -= mins
-  train_X /= (maxs-mins)
-  test_X -= mins
-  test_X /= (maxs-mins)
+    for tmp_ind in class_inds[iter+1:]:
+        new_dset_y[np.where(new_dset_y == tmp_ind)] -= 1
 
-  if dataset_file != "False":
-  	if not os.path.exists(os.path.dirname(dataset_file)):
-  		try:
-  			os.makedirs(os.path.dirname(dataset_file))
-  		except OSError as exc:
-  			if exc.errno != errno.EEXIST:
-  				raise
-  
-  	if mc != 1:
-  		hf = h5py.File(dataset_file.format(iter), 'w')
-  	else:
-  		hf = h5py.File(dataset_file, 'w')
-  
-  hf.create_dataset('X_train', data=train_X)
-  hf.create_dataset('y_train', data=train_y)
-  hf.create_dataset('X_test', data=test_X)
-  hf.create_dataset('y_test', data=test_y)
-  hf.create_dataset('labels', data=classes)
-  hf.create_dataset('means', data=means)  
-  hf.create_dataset('mins', data=mins)  
-  hf.create_dataset('maxs', data=maxs) 
-  hf.create_dataset('sampling', data=sampling)  
-  hf.create_dataset('cols', data=args["cols"].strip())
-  hf.close()
+    train_X, test_X, train_y, test_y = train_test_split(new_dset_X, new_dset_y, test_size=0.15, random_state=seed, stratify=new_dset_y)
 
-print("finished!!")
+    print("X_train: {} | X_test: {} | y_train: {} | y_test: {} | X_intruder: {} | y_intruder: {} | num_classes: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape, intruder_dset_X.shape, intruder_dset_y.shape, len(classes)))
+
+    means = np.mean(np.mean(train_X, axis=0), axis=0)
+    train_X -= means
+    test_X -= means
+    intruder_dset_X -= means
+
+    mins = np.max(np.min(train_X, axis=0), axis=0)
+    maxs = np.max(np.max(train_X, axis=0), axis=0)
+    train_X -= mins
+    train_X /= (maxs-mins)
+    test_X -= mins
+    test_X /= (maxs-mins)
+    intruder_dset_X -= mins
+    intruder_dset_X /= (maxs-mins)
+
+    if not os.path.exists(os.path.dirname(dataset_file)):
+        try:
+            os.makedirs(os.path.dirname(dataset_file))
+        except OSError as exc:
+            if exc.errno != errno.EEXIST:
+                raise
+
+    if mc != 1:
+        hf = h5py.File(dataset_file.format(iter), 'w')
+    else:
+        hf = h5py.File(dataset_file, 'w')
+
+    hf.create_dataset('X_train', data=train_X)
+    hf.create_dataset('y_train', data=train_y)
+    hf.create_dataset('X_test', data=test_X)
+    hf.create_dataset('y_test', data=test_y)
+    hf.create_dataset('X_intruder', data=intruder_dset_X)
+    hf.create_dataset('y_intruder', data=intruder_dset_y)
+    hf.create_dataset('labels', data=classes)
+    hf.create_dataset('means', data=means)  
+    hf.create_dataset('mins', data=mins)  
+    hf.create_dataset('maxs', data=maxs) 
+    hf.create_dataset('sampling', data=sampling)  
+    hf.create_dataset('cols', data="AMP")
+    hf.close()
+
+    print("finished!!")

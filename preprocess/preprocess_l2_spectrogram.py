@@ -4,6 +4,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
 from joblib import Parallel, delayed 
 from scipy.io import loadmat
+from scipy import signal
 import numpy as np
 import argparse
 import pickle
@@ -203,19 +204,35 @@ def smooth(x,window_len):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y[(window_len//2):-(window_len//2)]
 
-def compute_data(file_path, sampling, cols1, cols2, label, filter_size):
+def get_spectrogram(pca_data):
+    f,t,s = signal.spectrogram(pca_data[:, 0], 
+                        fs=2000, 
+                        window=signal.windows.gaussian(1024, (1024-1)/5), 
+                        nperseg=1024, 
+                        noverlap=986, 
+                        nfft=1024) 
+    for k in range(1, pca_data.shape[-1]):
+        f1,t1,s1 = signal.spectrogram(pca_data[:, k], 
+                            fs=2000, 
+                            window=signal.windows.gaussian(1024, (1024-1)/5), 
+                            nperseg=1024, 
+                            noverlap=986, 
+                            nfft=1024)  
+        s+=s1
+    return s
+
+def compute_data(file_path, sampling, cols1, cols2, label):
     if (not os.path.isfile(file_path)):
         raise ValueError("File dosn't exits")
 
-    pca = PCA(3)
-    csi_trace = get_csi(loadmat(file_path))[2000:10000]
+    pca = PCA(20)
+    csi_trace = get_csi(loadmat(file_path))[:10000]
     csi_trace = csi_trace[::sampling]
     csi_trace = fill_gaps(csi_trace, technique='mean')[:, cols1:cols2]    
     csi_trace -= np.mean(csi_trace, axis=0)
     csi_trace = pca.fit_transform(csi_trace)
-    csi_trace = pca.inverse_transform(csi_trace)
-    for i in range(csi_trace.shape[1]):
-        csi_trace[:, i] = smooth(csi_trace[:, i], filter_size)
+    csi_trace = get_spectrogram(csi_trace)
+
     return csi_trace.astype(np.float32), label
 
 #******************************************************************************#
@@ -261,7 +278,6 @@ elif cols == "ALL":
 else:
         raise ValueError("Check cols argument!! Got: {} | Acceptable arguments (AMP/PH/ALL)".format(cols))
 
-filter_size = 91
 rows = int(8000/sampling)
 
 print("rows:", rows, "| cols:", cols1, "-", cols2)
@@ -270,37 +286,14 @@ sys.stdout.flush()
 files, labels, classes = read_samples(src_path, ".mat")
 classes = [n.encode("ascii", "ignore") for n in classes]
 
-dset_X, dset_y = zip(*Parallel(n_jobs=-2)(delayed(compute_data)(files[ind], sampling, cols1, cols2, labels[ind], filter_size) for ind in range(len(files))))
+dset_X, dset_y = zip(*Parallel(n_jobs=-2)(delayed(compute_data)(files[ind], sampling, cols1, cols2, labels[ind]) for ind in range(len(files))))
 dset_X = np.array(dset_X)
 dset_y = np.array(dset_y)
-
-delete_inds = []
-
-print(dset_X.shape, dset_y.shape)
-
-for i in range(dset_X.shape[0]):
-    if (dset_X[i].shape != (rows, cols)):
-        delete_inds.append(i)
-        print("File dimension error | File:{} | Size:{}", files[i], dset_X[i].shape)
-
-dset_X = np.delete(dset_X, delete_inds, 0)
-dset_y = np.delete(dset_y, delete_inds, 0)
 
 for iter in range(mc):
   train_X, test_X, train_y, test_y = train_test_split(dset_X, dset_y, test_size=0.15, random_state=seed, stratify=dset_y)
 
   print("X_train: {} | X_test: {} | y_train: {} | y_test: {}".format(train_X.shape, test_X.shape, train_y.shape, test_y.shape))
-
-  means = np.mean(np.mean(train_X, axis=0), axis=0)
-  train_X -= means
-  test_X -= means
-
-  mins = np.max(np.min(train_X, axis=0), axis=0)
-  maxs = np.max(np.max(train_X, axis=0), axis=0)
-  train_X -= mins
-  train_X /= (maxs-mins)
-  test_X -= mins
-  test_X /= (maxs-mins)
 
   if dataset_file != "False":
   	if not os.path.exists(os.path.dirname(dataset_file)):
@@ -320,9 +313,6 @@ for iter in range(mc):
   hf.create_dataset('X_test', data=test_X)
   hf.create_dataset('y_test', data=test_y)
   hf.create_dataset('labels', data=classes)
-  hf.create_dataset('means', data=means)  
-  hf.create_dataset('mins', data=mins)  
-  hf.create_dataset('maxs', data=maxs) 
   hf.create_dataset('sampling', data=sampling)  
   hf.create_dataset('cols', data=args["cols"].strip())
   hf.close()
