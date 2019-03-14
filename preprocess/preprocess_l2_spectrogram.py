@@ -3,6 +3,8 @@
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
 from joblib import Parallel, delayed 
+import matplotlib.pyplot as plt
+from skimage import transform
 from scipy.io import loadmat
 from scipy import signal
 import numpy as np
@@ -204,36 +206,48 @@ def smooth(x,window_len):
     y=np.convolve(w/w.sum(),s,mode='valid')
     return y[(window_len//2):-(window_len//2)]
 
-def get_spectrogram(pca_data):
-    f,t,s = signal.spectrogram(pca_data[:, 0], 
-                        fs=2000, 
-                        window=signal.windows.gaussian(1024, (1024-1)/5), 
-                        nperseg=1024, 
-                        noverlap=986, 
-                        nfft=1024) 
-    for k in range(1, pca_data.shape[-1]):
-        f1,t1,s1 = signal.spectrogram(pca_data[:, k], 
-                            fs=2000, 
-                            window=signal.windows.gaussian(1024, (1024-1)/5), 
-                            nperseg=1024, 
-                            noverlap=986, 
-                            nfft=1024)  
-        s+=s1
-    return s
+def spectrogram(data, nfft=2048, window_size=1024, fs=2000, fc=10, n_components=30):
+    freq_res = (fs/2)/(nfft/2)
+    target_fft = int(np.ceil(150/freq_res))
+    
+    cmap_obj = plt.cm.ScalarMappable(cmap="jet")
+    cmap_obj.set_clim(-16, 6)
+        
+    pca = PCA(n_components=n_components)
+    data = pca.fit_transform(data)
+    
+    b, a = signal.butter(8, fc/(fs/2), 'high')
+    data = signal.lfilter(b, a, data, axis=0)
+
+    for i in range(n_components):
+        f,t,s = signal.spectrogram(data[:, i], 
+                                   fs=fs, 
+                                   window=signal.windows.gaussian(window_size, (window_size-1)/5),
+                                   noverlap=window_size-1, 
+                                   nfft=nfft)
+        s_target=np.abs(s)[:target_fft]
+        s_target /= np.sum(s_target, axis=0)
+        s_target -= np.mean(s_target)
+        s_target[np.where(s_target < 0)] = 0
+        if (i == 0):
+            s_new = s_target
+        else:
+            s_new += s_target
+
+    s_new = 20*np.log10(s_new+1e-9)   
+    s_new = transform.resize(s_new, (512, 512))
+    s_new = np.flip(s_new, axis=0)
+    return cmap_obj.to_rgba(s_new)[:, :, :3]
 
 def compute_data(file_path, sampling, cols1, cols2, label):
     if (not os.path.isfile(file_path)):
         raise ValueError("File dosn't exits")
 
-    pca = PCA(20)
     csi_trace = get_csi(loadmat(file_path))[:10000]
     csi_trace = csi_trace[::sampling]
     csi_trace = fill_gaps(csi_trace, technique='mean')[:, cols1:cols2]    
-    csi_trace -= np.mean(csi_trace, axis=0)
-    csi_trace = pca.fit_transform(csi_trace)
-    csi_trace = get_spectrogram(csi_trace)
 
-    return csi_trace.astype(np.float32), label
+    return spectrogram(csi_trace), label
 
 #******************************************************************************#
 
