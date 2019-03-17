@@ -1,6 +1,7 @@
 from tensorflow.keras.utils import multi_gpu_model
 from tensorflow.keras.models import Model
 from tensorflow.keras import optimizers
+from skimage.transform import resize
 from tensorflow.keras import layers
 import numpy as np
 import argparse
@@ -66,8 +67,10 @@ def main():
     ngpu=args.ngpu
 
     lr=1e-3
-    epochs=100
-    decay=1e-2
+    epochs=1000
+    decay=1e-3
+    height = 256
+    width = 2048
 
     hf = h5py.File(data_dir, 'r')
     train_classes = np.array(hf.get('labels')).astype(str)
@@ -78,6 +81,11 @@ def main():
     y_test = np.eye(num_classes)[hf.get('y_test')]
     hf.close()
 
+    X_train = np.array([resize(X_train[i], (height, width), mode='reflect', anti_aliasing=True) for i in range(X_train.shape[0])])
+    X_test = np.array([resize(X_test[i], (height, width), mode='reflect', anti_aliasing=True) for i in range(X_test.shape[0])])
+
+    print(X_train.shape, X_test.shape, y_train.shape, y_test.shape, num_classes)
+    
     input_layer = layers.Input(shape=(X_train.shape[1:]))
 
 	x = layers.Conv2D(16, (7, 7),
